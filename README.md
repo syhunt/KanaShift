@@ -22,9 +22,9 @@ For the Rust implementation, performance measurements assume a release build, as
 
 ## Live Demos
 
-[![ KanaShift – JP skin ](https://img.shields.io/badge/demo-live-green)](https://syhunt.github.io/kanashift/src/kanashift.html)
+[![ KanaShift – JP skin ](https://img.shields.io/badge/demo-live-green)](https://syhunt.github.io/KanaShift/src/kanashift.html)
 
-[![ PhonoShift – Latin ](https://img.shields.io/badge/demo-live-green)](https://syhunt.github.io/kanashift/src/phonoshift.html)
+[![ PhonoShift – Latin ](https://img.shields.io/badge/demo-live-green)](https://syhunt.github.io/KanaShift/src/phonoshift.html)
 
 ----
 
