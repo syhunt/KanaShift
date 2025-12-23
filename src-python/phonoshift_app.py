@@ -1,6 +1,6 @@
 # phonoshift_app.py
-# ROT500K Family / PhonoShift — Gradio UI (compat: no Blocks(css=...))
-# PhonoShift 1.0 - ROT500K family
+# ROT500K2 Family / PhonoShift — Gradio UI (compat: no Blocks(css=...))
+# PhonoShift 2.x - ROT500K2 family
 # Author: Felipe Daragon
 # https://github.com/syhunt/kanashift
 
@@ -8,17 +8,30 @@ import gradio as gr
 import phonoshift as ps
 
 ABOUT_MD = r"""
-## About the ROT500K Family
+## About the ROT500K2 Family
 
-**ROT500K** keeps output length identical to input and preserves separators (`space`, `-`, `'`) and character classes (digits remain digits).
-It is reversible with the same **password + salt + iterations**.
+**ROT500K2** is a keyed, format-preserving *rotation-based* obfuscation scheme.
+It preserves separators (`space`, `-`, `'`) and character classes (digits remain digits, letters remain letters),
+and is fully reversible with the same **password + salt + PBKDF2 iterations**.
 
-**ROT500KV** is the “verified” variant. It increases output to embed a keyed verification signal so decryption can return **true/false**.
-It auto-selects between:
-- **ROT500KT** (token verification): appends 1+ characters per token
-- **ROT500KP** (prefix verification): adds a short word-like prefix (good for short inputs)
+While the **payload** transformation itself preserves length, all ROT500K2 variants now prepend a **stealth frame**.
+This frame slightly increases total output length, but is designed to look like natural, human-written text
+rather than a fixed cryptographic header.
+
+**ROT500K2V** is the “verified” variant. In addition to the stealth frame, it embeds a keyed verification signal
+so decryption can return a definitive **true / false** result when parameters are incorrect.
+It automatically selects the most appropriate verification style:
+- **ROT500K2T** (token verification): appends a small number of characters per token (stealthy, robust)
+- **ROT500K2P** (prefix verification): adds a short word-like prefix (best for very short inputs)
 
 **Punctuation shifting (optional):** only rotates within `¿¡` and `!?` (does not move punctuation positions).
+
+---
+
+**Stealth framing:** outputs begin with a variable, pronounceable text segment that encodes
+`mode + nonce + padding` internally. There are no fixed markers, delimiters, or repeated signatures
+(no `ROT500K2:`, no colons, no constant layout). Each encoding produces a different-looking header,
+even for identical inputs.
 """
 
 CSS = """
@@ -34,25 +47,28 @@ def do_encode(mode: str, text_in: str, password: str, iterations: int, salt: str
         check_chars = max(1, int(check_chars))
         salt = salt or "NameFPE:v1"
 
-        if mode == "ROT500K":
-            enc = ps.rot500k_encrypt(text_in, password, iterations, salt, shift_punct)
-            dec = ps.rot500k_decrypt(enc, password, iterations, salt, shift_punct)
+        if mode == "ROT500K2":
+            enc = ps.rot500k2_encrypt(text_in, password, iterations, salt, shift_punct)
+            # Optional sanity check (since base mode has no verification)
+            dec = ps.rot500k2_decrypt(enc, password, iterations, salt, shift_punct)
             ok = (dec == text_in)
-            return enc, f"Encoded. Self-check (ROT500K only): {'OK' if ok else 'FAILED'}"
+            return enc, f"Encoded. Self-check (ROT500K2 only): {'OK' if ok else 'FAILED'}"
 
-        if mode == "ROT500KP":
-            enc = ps.rot500k_prefix_tagged(text_in, password, iterations, salt, shift_punct)
-            return enc, "Encoded (ROT500KP)."
+        if mode == "ROT500K2P":
+            enc = ps.rot500k2p_encrypt(text_in, password, iterations, salt, shift_punct)
+            return enc, "Encoded (ROT500K2P)."
 
-        if mode == "ROT500KT":
-            enc = ps.rot500k_token_tagged(text_in, password, iterations, salt, check_chars, shift_punct)
-            return enc, "Encoded (ROT500KT)."
+        if mode == "ROT500K2T":
+            enc = ps.rot500k2t_encrypt(text_in, password, iterations, salt, check_chars, shift_punct)
+            return enc, "Encoded (ROT500K2T)."
 
-        enc = ps.rot500kv(text_in, password, iterations, salt, check_chars, shift_punct)
-        return enc, "Encoded (ROT500KV)."
+        # ROT500K2V
+        enc = ps.rot500k2v_encrypt(text_in, password, iterations, salt, check_chars, shift_punct)
+        return enc, "Encoded (ROT500K2V)."
 
     except Exception as e:
         return "", f"Error: {e}"
+
 
 def do_decode(mode: str, text_in: str, password: str, iterations: int, salt: str, check_chars: int, shift_punct: bool):
     try:
@@ -60,36 +76,44 @@ def do_decode(mode: str, text_in: str, password: str, iterations: int, salt: str
         check_chars = max(1, int(check_chars))
         salt = salt or "NameFPE:v1"
 
-        if mode == "ROT500K":
-            dec = ps.rot500k_decrypt(text_in, password, iterations, salt, shift_punct)
-            return dec, "Decoded. (No verification in ROT500K)"
+        if mode == "ROT500K2":
+            dec = ps.rot500k2_decrypt(text_in, password, iterations, salt, shift_punct)
+            return dec, "Decoded. (No verification in ROT500K2)"
 
-        if mode == "ROT500KP":
-            r = ps.rot500k_prefix_tagged_decrypt(text_in, password, iterations, salt, shift_punct)
+        if mode == "ROT500K2P":
+            r = ps.rot500k2p_decrypt(text_in, password, iterations, salt, shift_punct)
             return r.value, f"Decoded. Verified: {'OK' if r.ok else 'FAILED'}"
 
-        if mode == "ROT500KT":
-            r = ps.rot500k_token_tagged_decrypt(text_in, password, iterations, salt, check_chars, shift_punct)
+        if mode == "ROT500K2T":
+            r = ps.rot500k2t_decrypt(text_in, password, iterations, salt, check_chars, shift_punct)
             return r.value, f"Decoded. Verified: {'OK' if r.ok else 'FAILED'}"
 
-        r = ps.rot500kv_decrypt(text_in, password, iterations, salt, check_chars, shift_punct)
+        # ROT500K2V
+        r = ps.rot500k2v_decrypt(text_in, password, iterations, salt, check_chars, shift_punct)
         return r.value, f"Decoded. Verified: {'OK' if r.ok else 'FAILED'}"
 
     except Exception as e:
         return "", f"Error: {e}"
 
+
 def do_swap(text_in: str, text_out: str):
     return text_out, text_in, "Swapped."
 
+
 def build_app():
     # No css= kwarg for old Gradio
-    with gr.Blocks(title="ROT500K Family / PhonoShift — Gradio Demo") as demo:
+    with gr.Blocks(title="ROT500K2 Family / PhonoShift — Gradio Demo") as demo:
         gr.HTML(CSS)
 
-        gr.Markdown("# ROT500K Family (aka *PhonoShift*) — Gradio Demo", elem_id="title")
+        gr.Markdown("# ROT500K2 Family (aka *PhonoShift*) — Gradio Demo", elem_id="title")
         gr.Markdown(
-            "**PhonoShift (ROT500K)** is a keyed, format-preserving obfuscation scheme that applies polyalphabetic, "
-            "class-preserving rotations driven by a PBKDF2-HMAC keystream. Default is **500,000 PBKDF2 iterations**.",
+            "**PhonoShift (ROT500K2)** is a keyed, format-preserving obfuscation scheme that applies polyalphabetic, "
+            "class-preserving rotations driven by a PBKDF2-derived keystream. Default is **500,000 PBKDF2 iterations**.",
+            elem_classes=["small"],
+        )
+        gr.Markdown(
+            "**V2:** outputs include a per-message nonce (safe reuse of the same password across messages), "
+            "verified modes derive their MAC key via PBKDF2, and framing is now **stealth** (no fixed signature).",
             elem_classes=["small"],
         )
 
@@ -97,11 +121,16 @@ def build_app():
             with gr.TabItem("Demo"):
                 with gr.Row():
                     mode = gr.Dropdown(
-                        choices=["ROT500K", "ROT500KV", "ROT500KT", "ROT500KP"],
-                        value="ROT500K",
+                        choices=["ROT500K2", "ROT500K2V", "ROT500K2T", "ROT500K2P"],
+                        value="ROT500K2",
                         label="Mode",
                     )
-                    check_chars = gr.Number(value=1, precision=0, label="Token check chars (ROT500KT / ROT500KV)", minimum=1)
+                    check_chars = gr.Number(
+                        value=1,
+                        precision=0,
+                        label="Token check chars (ROT500K2T / ROT500K2V)",
+                        minimum=1,
+                    )
 
                 shift_punct = gr.Checkbox(value=True, label="Shift punctuation (optional) — only ¿¡ and !?")
 
@@ -122,7 +151,10 @@ def build_app():
                     btn_swap = gr.Button("Swap ↔")
 
                 text_out = gr.Textbox(label="Output", lines=4)
-                status = gr.Markdown("Tip: Encode writes to Output. Decode reads from Input. In verified modes, Decode can detect wrong parameters.")
+                status = gr.Markdown(
+                    "Tip: **Encode** writes to Output. **Decode** reads from Input. "
+                    "Verified modes can detect wrong parameters. Base mode can’t (no MAC)."
+                )
 
                 btn_enc.click(
                     do_encode,
@@ -144,6 +176,7 @@ def build_app():
                 gr.Markdown(ABOUT_MD)
 
     return demo
+
 
 if __name__ == "__main__":
     app = build_app()

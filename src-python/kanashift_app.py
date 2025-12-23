@@ -1,6 +1,5 @@
 # kanashift_app.py
-# KanaShift 1.0 — Gradio UI (compat: no Blocks(css=...))
-# KanaShift - ROT500K family
+# KanaShift 2.x — Gradio UI (stealth framing / ROT500K2 family)
 # Author: Felipe Daragon
 # https://github.com/syhunt/kanashift
 
@@ -16,7 +15,7 @@ CSS = """
 """
 
 ABOUT_MD = r"""
-## About KanaShift
+## About KanaShift (2.x)
 
 This demo contains **two families**:
 
@@ -31,6 +30,9 @@ This demo contains **two families**:
 **Modes:**
 - Base modes: no verification.
 - **KT**: token verification (adds chars per token; decode returns OK/FAILED).
+
+**2.x wire format note (stealth):**
+Outputs start with a short **kana header + nonce** (no ASCII prefix, no separators), then the payload.
 """
 
 
@@ -40,19 +42,21 @@ def do_encode(mode: str, text_in: str, password: str, iterations: int, salt: str
         check_chars = max(1, int(check_chars))
         salt = salt or "NameFPE:v1"
 
-        if mode == "KAN500K":
-            out = ks.kanashift_skin_encrypt(text_in, password, iterations, salt, shift_punct)
-            return out, "Encoded (KAN500K skin). (No verification)"
-        if mode == "KAN500KT":
-            out = ks.kanashift_skin_token_encrypt(text_in, password, iterations, salt, check_chars, shift_punct)
-            return out, "Encoded (KAN500KT skin)."
+        if mode == "KAN500K2":
+            out = ks.kanashift2_skin_encrypt(text_in, password, iterations, salt, shift_punct)
+            return out, "Encoded (KAN500K2 skin). (No verification)"
 
-        if mode == "KAN500KJP":
-            out = ks.kanashift_jp_encrypt(text_in, password, iterations, salt, shift_punct)
-            return out, "Encoded (KAN500KJP). (No verification)"
-        if mode == "KAN500KJPT":
-            out = ks.kanashift_jp_token_encrypt(text_in, password, iterations, salt, check_chars, shift_punct)
-            return out, "Encoded (KAN500KJPT)."
+        if mode == "KAN500K2T":
+            out = ks.kanashift2_skin_token_encrypt(text_in, password, iterations, salt, check_chars, shift_punct)
+            return out, "Encoded (KAN500K2T skin, token-verified)."
+
+        if mode == "KAN500K2JP":
+            out = ks.kanashift2_jp_encrypt(text_in, password, iterations, salt, shift_punct)
+            return out, "Encoded (KAN500K2JP). (No verification)"
+
+        if mode == "KAN500K2JPT":
+            out = ks.kanashift2_jp_token_encrypt(text_in, password, iterations, salt, check_chars, shift_punct)
+            return out, "Encoded (KAN500K2JPT, token-verified)."
 
         return "", f"Error: Unknown mode {mode!r}"
 
@@ -66,18 +70,20 @@ def do_decode(mode: str, text_in: str, password: str, iterations: int, salt: str
         check_chars = max(1, int(check_chars))
         salt = salt or "NameFPE:v1"
 
-        if mode == "KAN500K":
-            out = ks.kanashift_skin_decrypt(text_in, password, iterations, salt, shift_punct)
-            return out, "Decoded. (No verification in KAN500K)"
-        if mode == "KAN500KT":
-            r = ks.kanashift_skin_token_decrypt(text_in, password, iterations, salt, check_chars, shift_punct)
+        if mode == "KAN500K2":
+            out = ks.kanashift2_skin_decrypt(text_in, password, iterations, salt, shift_punct)
+            return out, "Decoded. (No verification in KAN500K2)"
+
+        if mode == "KAN500K2T":
+            r = ks.kanashift2_skin_token_decrypt(text_in, password, iterations, salt, check_chars, shift_punct)
             return r.value, f"Decoded. Verified: {'OK' if r.ok else 'FAILED'}"
 
-        if mode == "KAN500KJP":
-            out = ks.kanashift_jp_decrypt(text_in, password, iterations, salt, shift_punct)
-            return out, "Decoded. (No verification in KAN500KJP)"
-        if mode == "KAN500KJPT":
-            r = ks.kanashift_jp_token_decrypt(text_in, password, iterations, salt, check_chars, shift_punct)
+        if mode == "KAN500K2JP":
+            out = ks.kanashift2_jp_decrypt(text_in, password, iterations, salt, shift_punct)
+            return out, "Decoded. (No verification in KAN500K2JP)"
+
+        if mode == "KAN500K2JPT":
+            r = ks.kanashift2_jp_token_decrypt(text_in, password, iterations, salt, check_chars, shift_punct)
             return r.value, f"Decoded. Verified: {'OK' if r.ok else 'FAILED'}"
 
         return "", f"Error: Unknown mode {mode!r}"
@@ -96,8 +102,8 @@ def build_app():
 
         gr.Markdown("# KanaShift — Offline Demo (Gradio Port)", elem_id="title")
         gr.Markdown(
-            "**KanaShift (a ROT500K mod)** is a keyed, format-preserving obfuscation scheme driven by a PBKDF2-derived keystream "
-            "(default **500,000 iterations**).",
+            "**KanaShift (ROT500K2 / 2.x)** is a keyed, format-preserving obfuscation scheme driven by a PBKDF2-derived keystream "
+            "(default **500,000 iterations**). Outputs include a short **kana header + nonce** to prevent keystream reuse.",
             elem_classes=["small"],
         )
 
@@ -105,13 +111,16 @@ def build_app():
             with gr.TabItem("Demo"):
                 with gr.Row():
                     mode = gr.Dropdown(
-                        choices=["KAN500K", "KAN500KT", "KAN500KJP", "KAN500KJPT"],
-                        value="KAN500K",
+                        choices=["KAN500K2", "KAN500K2T", "KAN500K2JP", "KAN500K2JPT"],
+                        value="KAN500K2",
                         label="Mode",
                     )
                     check_chars = gr.Number(value=1, precision=0, minimum=1, label="Token check chars (KT)")
 
-                shift_punct = gr.Checkbox(value=True, label="Punctuation hide (optional) — keyed shifting of JP punctuation glyphs")
+                shift_punct = gr.Checkbox(
+                    value=True,
+                    label="Punctuation hide (optional) — keyed shifting of JP punctuation glyphs",
+                )
 
                 text_in = gr.Textbox(
                     label="Input (plaintext or obfuscated)",

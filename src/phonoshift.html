@@ -1,19 +1,31 @@
 <!doctype html>
-<!-- PhonoShift v1.0 demo - ROT500K family - github.com/syhunt/kanashift -->
+<!-- PhonoShift v2.x demo — ROT500K family — github.com/syhunt/kanashift
+     Stealth framing patch (v3):
+     - No visible "ROT500K2" / "ROT500K2T" / "ROT500K2P" / ":" headers
+     - Per-message nonce is still present, but encoded into pronounceable “header words”
+     - Header word spacing + punctuation varies per message (no fixed signature)
+     - Decoder is strict: expects a valid stealth frame (no silent downgrade)
+-->
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>ROT500K Family / PhonoShift — Local Demo</title>
+  <title>ROT500K2 Family / PhonoShift — Local Demo</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <h1>ROT500K Family (aka <em>PhonoShift</em>) — Offline Demo</h1>
+  <h1>ROT500K2 Family (aka <em>PhonoShift</em>) — Offline Demo</h1>
 
   <p>
-    <strong>PhonoShift (ROT500K)</strong> is a keyed, format-preserving obfuscation scheme that applies polyalphabetic,
-    class-preserving rotations driven by a PBKDF2-HMAC keystream. The default configuration uses
+    <strong>PhonoShift (ROT500K2)</strong> is a keyed, format-preserving obfuscation scheme that applies polyalphabetic,
+    class-preserving rotations driven by a PBKDF2-derived keystream. The default configuration uses
     <strong>500,000 PBKDF2 iterations</strong>, from which the “500K” name originates.
+  </p>
+
+  <p class="small" style="opacity:.9">
+    <strong>V2:</strong> outputs now includes a per-message nonce (safe reuse of the same password across messages),
+    verified modes derive their MAC key via PBKDF2 (no fast HMAC-only password oracle),
+    and the framing/header is now <em>stealth</em> (no fixed nonce signature).
   </p>
 
   <div class="tabs">
@@ -27,19 +39,19 @@
         <div class="field">
           <label for="mode">Mode</label>
           <select id="mode">
-            <option value="ROT500K" selected>ROT500K — base (no length increase)</option>
-            <option value="ROT500KV">ROT500KV — verified (auto, increases output)</option>
-            <option value="ROT500KT">ROT500KT — token-verified (adds chars per token)</option>
-            <option value="ROT500KP">ROT500KP — prefix-verified (adds prefix tag)</option>
+            <option value="ROT500K2" selected>ROT500K2 — base (adds stealth header)</option>
+            <option value="ROT500K2V">ROT500K2V — verified (header + verification)</option>
+            <option value="ROT500K2T">ROT500K2T — token-verified (header + per-token chars)</option>
+            <option value="ROT500K2P">ROT500K2P — prefix-verified (header + prefix tag)</option>
           </select>
           <div class="small">
-            <span class="pill">ROT500K</span> keeps length.
-            <span class="pill">ROT500KV</span> adds verification so decrypt can return true/false.
+            <span class="pill">ROT500K2</span> keeps length (aside from stealth header).
+            <span class="pill">ROT500K2V</span> adds verification so decrypt can return true/false.
           </div>
         </div>
 
         <div class="field">
-          <label for="checkChars">Token check chars (ROT500KT / ROT500KV)</label>
+          <label for="checkChars">Token check chars (ROT500K2T / ROT500K2V)</label>
           <input id="checkChars" type="number" value="1" min="1" step="1" />
           <div class="small">Higher = lower chance of “false OK” with wrong password.</div>
         </div>
@@ -97,790 +109,1143 @@
 
   <div id="about" class="panel">
     <div class="box">
-      <h2 class="h2">About the ROT500K Family</h2>
+      <h2 class="h2">About the ROT500K2 Family</h2>
 
       <p>
-        <strong>ROT500K</strong> keeps the output length identical to the input and preserves separators
-        (<code>space</code>, <code>-</code>, <code>'</code>) and character classes (digits remain digits).
-        It is fully reversible with the same <em>password + salt + iterations</em>.
+        <strong>ROT500K2</strong> is a keyed, format-preserving <em>rotation-based</em> obfuscation scheme.
+        It preserves separators (<code>space</code>, <code>-</code>, <code>'</code>) and character classes
+        (digits remain digits, letters remain letters), and is fully reversible with the same
+        <em>password + salt + PBKDF2 iterations</em>.
       </p>
 
       <p>
-        <strong>ROT500KV</strong> is the “verified” variant. It intentionally increases output slightly to embed
-        a keyed verification signal, so decryption can return a definitive <em>true/false</em> result.
-        It automatically chooses the most appropriate verification style:
+        While the <strong>payload</strong> transformation itself preserves length, all ROT500K2 variants now
+        prepend a <strong>stealth frame</strong>. This frame slightly increases total output length, but is
+        designed to look like natural, human-written text rather than a fixed cryptographic header.
       </p>
+
+      <p>
+        <strong>ROT500K2V</strong> is the “verified” variant. In addition to the stealth frame, it embeds
+        a keyed verification signal so decryption can return a definitive
+        <em>true / false</em> result when parameters are incorrect.
+        It automatically selects the most appropriate verification style:
+      </p>
+
       <ul>
-        <li><strong>ROT500KT</strong> (token verification): appends 1+ characters per token (stealthy, robust)</li>
-        <li><strong>ROT500KP</strong> (prefix verification): adds a short, word-like prefix (best for very short inputs)</li>
+        <li>
+          <strong>ROT500K2T</strong> (token verification):
+          appends a small number of characters per token, offering strong verification while remaining subtle.
+        </li>
+        <li>
+          <strong>ROT500K2P</strong> (prefix verification):
+          adds a short, word-like prefix derived from the plaintext, best suited for very short inputs.
+        </li>
       </ul>
 
       <hr class="hr">
 
-      <h3 class="h3">How does this compare to ROT13?</h3>
-      <p>
-        ROT13 is a single fixed substitution with no secret — recognizable immediately and reversible with trivial effort.
-        ROT500K is keyed and polyalphabetic: the same plaintext character can map to different outputs depending on position,
-        and guessing parameters is expensive due to PBKDF2.
-      </p>
-
-      <p class="p0">
-        <strong>Quick rule:</strong> use <code>ROT500K</code> when you must keep length identical; use <code>ROT500KV</code>
-        when you also need decryption to detect wrong parameters.
-      </p>
-
-      <p class="small">
-        <strong>Punctuation shifting (optional):</strong> Rotates within
-        <code>¿ ¡</code> and <code>! ?</code>. It hides “question vs exclamation” while keeping text readable.
+      <p class="small" style="opacity:.85">
+        <strong>Stealth framing:</strong>
+        outputs begin with a variable, pronounceable text segment that encodes
+        <code>mode + nonce + padding</code> internally.
+        There are no fixed markers, delimiters, or repeated signatures
+        (no <code>ROT500K2:</code>, no colons, no constant layout).
+        Each encoding produces a different-looking header, even for identical inputs.
       </p>
     </div>
   </div>
 
   <script>
-  (() => {
-    const te = new TextEncoder();
+(() => {
+  const te = new TextEncoder();
 
-    // -----------------------------
-    // Core helpers
-    // -----------------------------
+  // ============================================================
+  // Stealth framing v4 (deterministic decode, no "B..." signature)
+  //
+  // Header bytes:
+  //   rotByte(1) + padLen(1) + modeId(1) + nonce(12) + pad(0..7)
+  //
+  // Encoding:
+  //   - first syllable encodes rotByte WITHOUT rotation (so decoder can read it)
+  //   - remaining bytes are encoded with +rotByte
+  //
+  // Decoder:
+  //   - reads first 3 bytes (rotByte+padLen+modeId) deterministically
+  //   - reads exact header letter count, decodes deterministically
+  //   - skips joiner chars between header and payload
+  // ============================================================
 
-    function isSeparator(ch) { return ch === " " || ch === "-" || ch === "'"; }
+  const NONCE_LEN = 12;
+  const PAD_MAX = 7;
 
-    function isDigit(ch) { return ch >= "0" && ch <= "9"; }
-    function isAsciiUpper(ch) { return ch >= "A" && ch <= "Z"; }
-    function isAsciiLower(ch) { return ch >= "a" && ch <= "z"; }
-    function toLowerASCII(ch) { return isAsciiUpper(ch) ? String.fromCharCode(ch.charCodeAt(0) | 0x20) : ch; }
-    function toUpperASCII(ch) { return isAsciiLower(ch) ? String.fromCharCode(ch.charCodeAt(0) & ~0x20) : ch; }
+  const MODE_ID = {
+    ROT500K2:  0,
+    ROT500K2V: 1,
+    ROT500K2T: 2,
+    ROT500K2P: 3,
+  };
+  const MODE_FROM_ID = Object.fromEntries(Object.entries(MODE_ID).map(([k, v]) => [v, k]));
 
-    function indexOfChar(setChars, ch) { return setChars.indexOf(ch); }
+  // -----------------------------
+  // base64url helpers
+  // -----------------------------
+  function b64urlEncode(bytes) {
+    let bin = "";
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    const b64 = btoa(bin);
+    return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  }
+  function b64urlDecode(s) {
+    const b64 = s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4);
+    const bin = atob(b64);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
 
-    function effectiveShift(shift, setSize) {
-      if (setSize <= 1) return 0;
-      let m = shift % setSize; // can be negative
-      if (m === 0) m = (shift >= 0) ? 1 : -1; // never allow 0-rotation
-      return m;
-    }
+  function makeNonceBytes() {
+    const n = new Uint8Array(NONCE_LEN);
+    crypto.getRandomValues(n);
+    return n;
+  }
 
-    function rotateInSetNoZero(setChars, ch, shift) {
-      const n = setChars.length;
-      const idx = setChars.indexOf(ch);
-      if (idx < 0) return ch;
+  // -----------------------------
+  // Domain-separated salt builder (nonce-aware)
+  // -----------------------------
+  function dsalt(baseSalt, nonceB64u, domain) {
+    return `${baseSalt}|${domain}|n=${nonceB64u}`;
+  }
 
-      const eff = effectiveShift(shift, n);
-      // JS % can be negative, so normalize
-      const j = (idx + eff) % n;
-      const jj = (j + n) % n;
-      return setChars.charAt(jj);
-    }
+  // -----------------------------
+  // Core helpers
+  // -----------------------------
+  function isSeparator(ch) { return ch === " " || ch === "-" || ch === "'"; }
+  function isDigit(ch) { return ch >= "0" && ch <= "9"; }
+  function isAsciiUpper(ch) { return ch >= "A" && ch <= "Z"; }
+  function isAsciiLower(ch) { return ch >= "a" && ch <= "z"; }
+  function toLowerASCII(ch) { return isAsciiUpper(ch) ? String.fromCharCode(ch.charCodeAt(0) | 0x20) : ch; }
+  function toUpperASCII(ch) { return isAsciiLower(ch) ? String.fromCharCode(ch.charCodeAt(0) & ~0x20) : ch; }
 
-    async function deriveKeyStream(password, salt, iterations, needBytes) {
-      if (needBytes < 32) needBytes = 32;
-      const pwBytes = te.encode(password);
-      const saltBytes = te.encode(salt);
+  function isLatinLetter(ch) {
+    const c = ch.charCodeAt(0);
+    return (c >= 65 && c <= 90) || (c >= 97 && c <= 122);
+  }
 
-      const baseKey = await crypto.subtle.importKey("raw", pwBytes, "PBKDF2", false, ["deriveBits"]);
-      const bits = await crypto.subtle.deriveBits(
-        { name: "PBKDF2", hash: "SHA-256", salt: saltBytes, iterations: iterations },
-        baseKey,
-        needBytes * 8
-      );
-      return new Uint8Array(bits);
-    }
+  function effectiveShift(shift, setSize) {
+    if (setSize <= 1) return 0;
+    let m = shift % setSize;
+    if (m === 0) m = (shift >= 0) ? 1 : -1;
+    return m;
+  }
 
-    async function transformNameNameLikeFPE(s, password, iterations, salt, direction) {
-      const VOW_LO = "aeiou";
-      const CON_LO = "bcdfghjklmnpqrstvwxyz";
+  function rotateInSetNoZero(setChars, ch, shift) {
+    const n = setChars.length;
+    const idx = setChars.indexOf(ch);
+    if (idx < 0) return ch;
+    const eff = effectiveShift(shift, n);
+    const j = (idx + eff) % n;
+    const jj = (j + n) % n;
+    return setChars.charAt(jj);
+  }
 
-      const VOW_LO_PT = "áàâãäéèêëíìîïóòôõöúùûü";
-      const VOW_UP_PT = "ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜ";
+  async function deriveKeyStream(password, salt, iterations, needBytes) {
+    if (needBytes < 32) needBytes = 32;
+    const pwBytes = te.encode(password);
+    const saltBytes = te.encode(salt);
 
-      const CON_LO_PT = "ç";
-      const CON_UP_PT = "Ç";
+    const baseKey = await crypto.subtle.importKey("raw", pwBytes, "PBKDF2", false, ["deriveBits"]);
+    const bits = await crypto.subtle.deriveBits(
+      { name: "PBKDF2", hash: "SHA-256", salt: saltBytes, iterations: iterations },
+      baseKey,
+      needBytes * 8
+    );
+    return new Uint8Array(bits);
+  }
 
-      if (!s) return s;
+  // ============================================================
+  // Pronounceable syllable codec for header bytes (3-letter syllables)
+  // ============================================================
 
-      const ks = await deriveKeyStream(password, salt, iterations, s.length + 64);
-      let kpos = 0;
+  const H_CSET = "bcdfghjklmnpqrstvwxyz"; // 21
+  const H_VSET = "aeiou";                 // 5
+  const H_END  = "nrls";                  // 4
+  const BYTE_SYL = [];
+  const SYL_TO_BYTE = new Map();
 
-      let out = "";
-      for (let i = 0; i < s.length; i++) {
-        const c = s.charAt(i);
-
-        if (isSeparator(c)) { out += c; continue; }
-
-        // +1 ensures keystream never produces a 0 shift (and remains invertible because direction flips on decrypt)
-        const shift = ((ks[kpos] | 0) + 1) * direction;
-        kpos++; if (kpos >= ks.length) kpos = 0;
-
-if (isDigit(c)) {
-  const d = c.charCodeAt(0) - 48;
-  const nd = (d + (shift % 10) + 10) % 10; // strict, invertible
-  out += String.fromCharCode(48 + nd);
-  continue;
-}
-
-        const upper = isAsciiUpper(c) || (VOW_UP_PT.includes(c) || CON_UP_PT.includes(c));
-
-        let lc = c;
-        if (isAsciiUpper(lc)) lc = toLowerASCII(lc);
-
-        if (VOW_LO.includes(lc)) {
-          let ch = rotateInSetNoZero(VOW_LO, lc, shift);
-          if (upper) ch = toUpperASCII(ch);
-          out += ch;
-          continue;
+  (function buildAlphabet() {
+    for (let ci = 0; ci < H_CSET.length; ci++) {
+      for (let vi = 0; vi < H_VSET.length; vi++) {
+        for (let ei = 0; ei < H_END.length; ei++) {
+          if (BYTE_SYL.length >= 256) break;
+          const syl = H_CSET[ci] + H_VSET[vi] + H_END[ei];
+          BYTE_SYL.push(syl);
         }
-
-        if (CON_LO.includes(lc)) {
-          let ch = rotateInSetNoZero(CON_LO, lc, shift);
-          if (upper) ch = toUpperASCII(ch);
-          out += ch;
-          continue;
-        }
-
-        if (VOW_LO_PT.includes(c)) { out += rotateInSetNoZero(VOW_LO_PT, c, shift); continue; }
-        if (VOW_UP_PT.includes(c)) { out += rotateInSetNoZero(VOW_UP_PT, c, shift); continue; }
-
-        if (CON_LO_PT.includes(c)) { out += rotateInSetNoZero(CON_LO_PT, c, shift); continue; }
-        if (CON_UP_PT.includes(c)) { out += rotateInSetNoZero(CON_UP_PT, c, shift); continue; }
-
-        out += c;
+        if (BYTE_SYL.length >= 256) break;
       }
+      if (BYTE_SYL.length >= 256) break;
+    }
+    for (let i = 0; i < BYTE_SYL.length; i++) SYL_TO_BYTE.set(BYTE_SYL[i], i);
+  })();
 
-      return out;
+  // v4: first byte (rotByte) encoded unrotated; remainder rotated by rotByte
+  function encodeHeaderBytesToLetters(bytes) {
+    let out = BYTE_SYL[bytes[0] & 0xff]; // rotByte raw
+    const rot = bytes[0] & 0xff;
+    for (let i = 1; i < bytes.length; i++) out += BYTE_SYL[(bytes[i] + rot) & 0xff];
+    return out;
+  }
+
+  function decodeHeaderLettersToBytes(lettersLower, totalBytes) {
+    const needLetters = totalBytes * 3;
+    if (lettersLower.length < needLetters) return null;
+
+    const out = new Uint8Array(totalBytes);
+
+    const syl0 = lettersLower.slice(0, 3);
+    const v0 = SYL_TO_BYTE.get(syl0);
+    if (v0 === undefined) return null;
+    out[0] = v0 & 0xff;
+
+    const rot = out[0] & 0xff;
+
+    for (let i = 1; i < totalBytes; i++) {
+      const syl = lettersLower.slice(i * 3, i * 3 + 3);
+      const v = SYL_TO_BYTE.get(syl);
+      if (v === undefined) return null;
+      out[i] = (v - rot + 256) & 0xff;
+    }
+    return out;
+  }
+
+  // ============================================================
+  // Header formatting (human-ish)
+  // ============================================================
+
+  const MAX_SYL_PER_WORD = 3; // keep words short (<= 9 letters before breaks)
+
+  function pickSep(b) {
+    const r = b % 100;
+    if (r < 70) return " ";
+    if (r < 86) return ", ";
+    if (r < 95) return " — ";
+    return "; ";
+  }
+
+  function capFirstWord(w) {
+    if (!w) return w;
+    return w.charAt(0).toUpperCase() + w.slice(1);
+  }
+
+  function chooseWordSyl(rem, seedByte) {
+    const max = Math.min(MAX_SYL_PER_WORD, rem);
+    if (max <= 1) return 1;
+
+    const r = seedByte % 100;
+    let want;
+    if (r < 15) want = 1;
+    else if (r < 60) want = 2;
+    else want = 3;
+
+    want = Math.min(want, max);
+
+    if (rem - want === 1 && rem > 1) {
+      if (want > 1) want -= 1;
+      else want = Math.min(2, max);
+    }
+    return want;
+  }
+
+  function maybeAddInternalBreaks(word, sylCount, seedByte) {
+    if (sylCount < 2) return word;
+
+    const r = seedByte % 100;
+    const doBreak = (sylCount === 3) ? (r < 70) : (r < 35);
+    if (!doBreak) return word;
+
+    const breakChar = (seedByte & 1) ? "-" : "'";
+    if (sylCount === 2) return word.slice(0, 3) + breakChar + word.slice(3);
+
+    const pos = (seedByte % 2) ? 3 : 6;
+    return word.slice(0, pos) + breakChar + word.slice(pos);
+  }
+
+  function formatHeaderFromLetters(headerLettersLower, seedBytes) {
+    const syls = [];
+    for (let i = 0; i < headerLettersLower.length; i += 3) syls.push(headerLettersLower.slice(i, i + 3));
+
+    const totalSyl = syls.length;
+    const minWords = Math.ceil(totalSyl / MAX_SYL_PER_WORD);
+    const maxWords = totalSyl;
+
+    let target = 6 + (seedBytes[0] % 7); // 6..12
+    if (target < minWords) target = minWords;
+    if (target > maxWords) target = maxWords;
+
+    const sizes = [];
+    let rem = totalSyl;
+    for (let wi = 0; wi < target; wi++) {
+      const wordsLeft = target - wi;
+      const minHere = Math.max(1, rem - (wordsLeft - 1) * MAX_SYL_PER_WORD);
+      const maxHere = Math.min(MAX_SYL_PER_WORD, rem - (wordsLeft - 1) * 1);
+
+      let want = chooseWordSyl(rem, seedBytes[(7 + wi) & 31]);
+      if (want < minHere) want = minHere;
+      if (want > maxHere) want = maxHere;
+
+      sizes.push(want);
+      rem -= want;
+    }
+    while (rem > 0) {
+      sizes.push(Math.min(MAX_SYL_PER_WORD, rem));
+      rem -= sizes[sizes.length - 1];
     }
 
-    // -----------------------------
-    // Optional punctuation shifting (only ¿¡ and !?)
-    // -----------------------------
-    const P_OPEN = "¿¡";
-    const P_END  = "!?";
-
-    function isShiftPunct(ch) {
-      return P_OPEN.includes(ch) || P_END.includes(ch);
+    const words = [];
+    let p = 0;
+    for (let i = 0; i < sizes.length; i++) {
+      let w = "";
+      for (let k = 0; k < sizes[i]; k++) w += syls[p++];
+      w = maybeAddInternalBreaks(w, sizes[i], seedBytes[(19 + i) & 31]);
+      if (w) words.push(w);
     }
 
-    async function punctShiftApply(s, password, iterations, salt, direction) {
-      if (!s) return s;
-
-      let need = 0;
-      for (let i = 0; i < s.length; i++) if (isShiftPunct(s.charAt(i))) need++;
-      if (need === 0) return s;
-
-      const punctSalt = salt + "|PunctShift:v1";
-      const ks = await deriveKeyStream(password, punctSalt, iterations, need + 64);
-      let kpos = 0;
-
-      let out = s.split("");
-      for (let i = 0; i < out.length; i++) {
-        const c = out[i];
-        if (!isShiftPunct(c)) continue;
-
-        const shift = ((ks[kpos] | 0) + 1) * direction;
-        kpos++; if (kpos >= ks.length) kpos = 0;
-
-        if (P_OPEN.includes(c)) out[i] = rotateInSetNoZero(P_OPEN, c, shift);
-        else out[i] = rotateInSetNoZero(P_END, c, shift);
-      }
-
-      return out.join("");
+    let out = "";
+    for (let i = 0; i < words.length; i++) {
+      const w = words[i];
+      if (!out) { out = capFirstWord(w); continue; }
+      const spr = (seedBytes[(21 + i) & 31] % 29) === 0 ? "." : "";
+      out += spr + pickSep(seedBytes[(3 + i) & 31]) + w;
     }
 
-    async function ROT500K_Encrypt(name, password, iterations = 500000, salt = "NameFPE:v1", shiftPunctuation = true) {
-      let r = await transformNameNameLikeFPE(name, password, iterations, salt, +1);
-      if (shiftPunctuation) r = await punctShiftApply(r, password, iterations, salt, +1);
-      return r;
+    const endStyle = seedBytes[2] % 5;
+    if (endStyle === 0) out += " ";
+    else if (endStyle === 1) out += ", ";
+    else if (endStyle === 2) out += " — ";
+    else if (endStyle === 3) out += "; ";
+    else out += " ";
+
+    return out;
+  }
+
+  // ============================================================
+  // Stealth frame pack/unpack (v4)
+  // ============================================================
+
+  function buildStealthFrame(modeStr, nonceBytes) {
+    const padLen = Math.floor(Math.random() * (PAD_MAX + 1)); // 0..7
+    const pad = new Uint8Array(padLen);
+    if (padLen) crypto.getRandomValues(pad);
+
+    const modeId = MODE_ID[modeStr];
+    if (modeId === undefined) throw new Error("Unknown mode for framing.");
+
+    const rotArr = new Uint8Array(1);
+    crypto.getRandomValues(rotArr);
+    const rotByte = rotArr[0] & 0xff;
+
+    // bytes = rotByte + padLen + modeId + nonce + pad
+    const bytes = new Uint8Array(1 + 1 + 1 + NONCE_LEN + padLen);
+    bytes[0] = rotByte;
+    bytes[1] = padLen & 0xff;
+    bytes[2] = modeId & 0xff;
+    bytes.set(nonceBytes, 3);
+    if (padLen) bytes.set(pad, 3 + NONCE_LEN);
+
+    const headerLetters = encodeHeaderBytesToLetters(bytes);
+
+    const seed = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) {
+      seed[i] =
+        bytes[(i * 7) % bytes.length] ^
+        bytes[(i * 13 + 1) % bytes.length] ^
+        ((i * 29) & 0xff);
     }
 
-    async function ROT500K_Decrypt(obfuscated, password, iterations = 500000, salt = "NameFPE:v1", shiftPunctuation = true) {
-      let s = obfuscated;
-      if (shiftPunctuation) s = await punctShiftApply(s, password, iterations, salt, -1);
-      return transformNameNameLikeFPE(s, password, iterations, salt, -1);
-    }
+    return formatHeaderFromLetters(headerLetters, seed);
+  }
 
-    // -----------------------------
-    // HMAC helpers (WebCrypto)
-    // -----------------------------
-    async function hmacSha256Bytes(keyStr, msgStr) {
-      const keyBytes = te.encode(keyStr);
-      const msgBytes = te.encode(msgStr);
-      const key = await crypto.subtle.importKey("raw", keyBytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-      const sig = await crypto.subtle.sign("HMAC", key, msgBytes);
-      return new Uint8Array(sig);
-    }
+  // ---------- STRICT frame parse (from start of string) ----------
+  function parseStealthFrameAndPayloadStrict(s) {
+    if (typeof s !== "string" || s.length < 12) return null;
 
-    // -----------------------------
-    // ROT500KT (token-verified) — match
-    // -----------------------------
-    function isTokenSep(ch) {
-      // IsTokenSep includes: space - ' . , ! ? : ; and \t \n \r
+    function isJoinerChar(ch) {
       return (
-        ch === " " || ch === "-" || ch === "'" ||
-        ch === "." || ch === "," || ch === "!" || ch === "?" ||
-        ch === ":" || ch === ";" ||
-        ch === "\t" || ch === "\n" || ch === "\r"
+        ch === " " || ch === "\t" || ch === "\n" || ch === "\r" ||
+        ch === "," || ch === ";" ||
+        ch === "-" || ch === "—"
       );
     }
 
-    function isAllDigitsStr(s) {
-      if (!s) return false;
-      for (let i = 0; i < s.length; i++) if (!isDigit(s.charAt(i))) return false;
-      return true;
-    }
-
-    function isAllUpperASCII(s) {
-      let hasLetter = false;
-      for (let i = 0; i < s.length; i++) {
-        const c = s.charAt(i);
-        if (c >= "a" && c <= "z") return false;
-        if (c >= "A" && c <= "Z") hasLetter = true;
+    function collectLetters(maxLetters) {
+      let letters = "";
+      let payloadStart = -1;
+      for (let j = 0; j < s.length; j++) {
+        const ch = s.charAt(j);
+        if (isLatinLetter(ch)) letters += toLowerASCII(ch);
+        if (letters.length === maxLetters) { payloadStart = j + 1; break; }
       }
-      return hasLetter;
+      return { letters, payloadStart };
     }
 
-    const CONSET = "bcdfghjklmnpqrstvwxyz";
+    // Need first 3 bytes: rotByte + padLen + modeId => 9 letters
+    const first = collectLetters(9);
+    if (first.letters.length < 9) return null;
 
-    async function tokenDigest(password, salt, iterations, tokenIndex, tokenPlain) {
-      const msg = `PhonoShiftTok:v1|${salt}|${iterations}|${tokenIndex}|${tokenPlain}`;
-      return hmacSha256Bytes(password, msg);
+    const first3 = decodeHeaderLettersToBytes(first.letters, 3);
+    if (!first3) return null;
+
+    const padLen = first3[1];
+    const modeId = first3[2];
+    const modeStr = MODE_FROM_ID[modeId];
+    if (!modeStr) return null;
+    if (padLen > PAD_MAX) return null;
+
+    const totalBytes = 1 + 1 + 1 + NONCE_LEN + padLen;
+    const needLetters = totalBytes * 3;
+
+    const full = collectLetters(needLetters);
+    if (full.payloadStart < 0) return null;
+
+    const headerBytes = decodeHeaderLettersToBytes(full.letters, totalBytes);
+    if (!headerBytes) return null;
+
+    // Validate critical fields to reduce false positives
+    if (headerBytes[1] !== padLen) return null;
+    if (headerBytes[2] !== modeId) return null;
+
+    const nonceBytes = headerBytes.slice(3, 3 + NONCE_LEN);
+    const nonceB64u = b64urlEncode(nonceBytes);
+
+    // Skip joiners between header and payload
+    let ps = full.payloadStart;
+    while (ps < s.length && isJoinerChar(s.charAt(ps))) ps++;
+
+    const payload = s.slice(ps);
+    if (!payload) return null;
+
+    return { modeStr, nonceB64u, payload };
+  }
+
+  // Default strict behavior used by verified modes (unchanged)
+  function parseStealthFrameAndPayload(s) {
+    return parseStealthFrameAndPayloadStrict(s);
+  }
+
+  // ---------- TOLERANT scan (find frame anywhere in the string) ----------
+  function parseStealthFrameAndPayloadTolerant(s, expectedModeStr) {
+    if (typeof s !== "string" || s.length < 12) return null;
+
+    // Bound scan to avoid pathological inputs
+    const limit = Math.min(s.length, 512);
+
+    for (let i = 0; i < limit; i++) {
+      if (!isLatinLetter(s.charAt(i))) continue;
+
+      const u = parseStealthFrameAndPayloadStrict(s.slice(i));
+      if (!u) continue;
+
+      if (expectedModeStr && u.modeStr !== expectedModeStr) continue;
+      return u;
     }
+    return null;
+  }
 
-    function makeTokenCheck(tokenPlain, kind, macBytes, checkCharsPerToken) {
-      const n = Math.max(1, checkCharsPerToken | 0);
-      const upperMode = (kind === "alpha") && isAllUpperASCII(tokenPlain);
+  // ============================================================
+  // PhonoShift core (ROT500K2 family) — nonce-aware
+  // ============================================================
 
-      let out = "";
-      for (let i = 0; i < n; i++) {
-        const b = macBytes[(i * 7) & 31];
-        if (kind === "digits") out += String.fromCharCode(48 + (b % 10));
-        else {
-          let ch = CONSET.charAt(b % CONSET.length);
-          if (upperMode) ch = ch.toUpperCase();
-          out += ch;
-        }
-      }
-      return out;
-    }
+  async function transformNameNameLikeFPE(s, password, iterations, salt, nonceB64u, direction) {
+    const VOW_LO = "aeiou";
 
-    async function buildPlainTokenChecks(plain, password, salt, iterations, checkCharsPerToken) {
-      const checks = [];
-      let tok = "";
-      let tokIdx = 0;
+    // split consonants into human-looking vs rare
+    const CON_COMMON = "bcdfghklmnprstvwy"; // frequent in Latin languages
+    const CON_RARE   = "jqxz";
 
-      for (let i = 0; i < plain.length; i++) {
-        const c = plain.charAt(i);
-        if (isTokenSep(c)) {
-          if (tok) {
-            const kind = isAllDigitsStr(tok) ? "digits" : "alpha";
-            const mac = await tokenDigest(password, salt, iterations, tokIdx, tok);
-            checks.push(makeTokenCheck(tok, kind, mac, checkCharsPerToken));
-            tokIdx++;
-            tok = "";
-          }
-        } else {
-          tok += c;
-        }
-      }
-
-      if (tok) {
-        const kind = isAllDigitsStr(tok) ? "digits" : "alpha";
-        const mac = await tokenDigest(password, salt, iterations, tokIdx, tok);
-        checks.push(makeTokenCheck(tok, kind, mac, checkCharsPerToken));
-      }
-
-      return checks;
-    }
-
-    function attachChecksToCipher(cipher, checks) {
-      let out = "";
-      let tok = "";
-      let tokIdx = 0;
-
-      for (let i = 0; i < cipher.length; i++) {
-        const c = cipher.charAt(i);
-        if (isTokenSep(c)) {
-          if (tok) {
-            if (tokIdx >= checks.length) throw new Error("ROT500K_TokenTagged: token/check count mismatch.");
-            out += tok + checks[tokIdx];
-            tokIdx++;
-            tok = "";
-          }
-          out += c;
-        } else {
-          tok += c;
-        }
-      }
-
-      if (tok) {
-        if (tokIdx >= checks.length) throw new Error("ROT500K_TokenTagged: token/check count mismatch.");
-        out += tok + checks[tokIdx];
-        tokIdx++;
-      }
-
-      if (tokIdx !== checks.length) throw new Error("ROT500K_TokenTagged: unused checks remain.");
-      return out;
-    }
-
-    function stripChecksFromTagged(tagged, checkCharsPerToken) {
-      const n = Math.max(1, checkCharsPerToken | 0);
-
-      let baseCipher = "";
-      const givenChecks = [];
-
-      let tok = "";
-      for (let i = 0; i < tagged.length; i++) {
-        const c = tagged.charAt(i);
-        if (isTokenSep(c)) {
-          if (tok) {
-            if (tok.length <= n) return null;
-            const chk = tok.slice(-n);
-            const baseTok = tok.slice(0, -n);
-            givenChecks.push(chk);
-            baseCipher += baseTok;
-            tok = "";
-          }
-          baseCipher += c;
-        } else {
-          tok += c;
-        }
-      }
-
-      if (tok) {
-        if (tok.length <= n) return null;
-        const chk = tok.slice(-n);
-        const baseTok = tok.slice(0, -n);
-        givenChecks.push(chk);
-        baseCipher += baseTok;
-      }
-
-      return { baseCipher, givenChecks };
-    }
-
-    async function ROT500K_TokenTagged(name, password, iterations = 500000, salt = "NameFPE:v1", checkCharsPerToken = 1, shiftPunctuation = true) {
-      const cipher = await transformNameNameLikeFPE(name, password, iterations, salt, +1);
-
-      const checks = await buildPlainTokenChecks(name, password, salt, iterations, checkCharsPerToken);
-      let out = attachChecksToCipher(cipher, checks);
-
-      if (shiftPunctuation) out = await punctShiftApply(out, password, iterations, salt, +1);
-      return out;
-    }
-
-    async function ROT500K_TokenTaggedDecrypt(tagged, password, iterations = 500000, salt = "NameFPE:v1", checkCharsPerToken = 1, shiftPunctuation = true) {
-      let s = tagged;
-      if (shiftPunctuation) s = await punctShiftApply(s, password, iterations, salt, -1);
-
-      const stripped = stripChecksFromTagged(s, checkCharsPerToken);
-      if (!stripped) return { ok: false, value: "" };
-
-      const plain = await transformNameNameLikeFPE(stripped.baseCipher, password, iterations, salt, -1);
-      const expected = await buildPlainTokenChecks(plain, password, salt, iterations, checkCharsPerToken);
-
-      if (expected.length !== stripped.givenChecks.length) return { ok: false, value: "" };
-      for (let i = 0; i < expected.length; i++) {
-        if (expected[i] !== stripped.givenChecks[i]) return { ok: false, value: "" };
-      }
-
-      return { ok: true, value: plain };
-    }
-
-    // -----------------------------
-    // ROT500KP (prefix-verified)
-    // -----------------------------
-    const ROT500K_TAG_DOMAIN = "PhonoShiftTag:v1";
-
-    function onlyLettersASCIIOrPT(c) {
-      const pt = "áàâãäéèêëíìîïóòôõöúùûüÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜçÇ";
-      return (c >= "A" && c <= "Z") || (c >= "a" && c <= "z") || pt.includes(c);
-    }
-
-    function detectCaseStyle(plain) {
-      let hasLetter = false, anyUpper = false, anyLower = false;
-
-      for (let i = 0; i < plain.length; i++) {
-        const c = plain.charAt(i);
-        if (!onlyLettersASCIIOrPT(c)) continue;
-
-        hasLetter = true;
-        if (c >= "A" && c <= "Z") anyUpper = true;
-        else if (c >= "a" && c <= "z") anyLower = true;
-        else { anyUpper = true; anyLower = true; }
-      }
-
-      if (!hasLetter) return "title";
-      if (anyUpper && !anyLower) return "upper";
-      if (anyLower && !anyUpper) return "lower";
-      return "title";
-    }
-
-    function applyCaseStyleToWord(w, style) {
-      if (!w) return w;
-
-      if (style === "upper") return w.toUpperCase();
-      if (style === "lower") return w.toLowerCase();
-
-      // title: upper first, lower rest (ASCII-ish behavior; good enough for tag words)
-      const low = w.toLowerCase();
-      return low.charAt(0).toUpperCase() + low.slice(1);
-    }
-
-    function applyCaseStyleToPhrase(phrase, style) {
-      return phrase.split(" ").map(p => applyCaseStyleToWord(p, style)).join(" ");
-    }
-
-    function makePronounceableWordFromBytes(bytes, offset, syllables) {
-      const CSet = "bcdfghjklmnpqrstvwxyz";
-      const VSet = "aeiou";
-      let out = "";
-      for (let i = 0; i < syllables; i++) {
-        const x = bytes[(offset + i) & 31];
-        const cIdx = x % CSet.length;
-        const vIdx = Math.floor(x / CSet.length) % VSet.length;
-        out += CSet.charAt(cIdx) + VSet.charAt(vIdx);
-      }
-      return out;
-    }
-
-    function pickPunctFromBytes(bytes) {
-      // only '? ' or '! '
-      const puncts = ["? ", "! "];
-      return puncts[bytes[0] % puncts.length];
-    }
-
-    async function buildTagPrefixForPlaintext(plain, password, iterations, salt) {
-      const msg = `${ROT500K_TAG_DOMAIN}|${salt}|${iterations}|${plain}`;
-      const mac = await hmacSha256Bytes(password, msg);
-
-      const w1 = makePronounceableWordFromBytes(mac, 1, 3);
-      const w2 = makePronounceableWordFromBytes(mac, 4, 3);
-      let phrase = `${w1} ${w2}`;
-
-      const punct = pickPunctFromBytes(mac);
-      const style = detectCaseStyle(plain);
-      phrase = applyCaseStyleToPhrase(phrase, style);
-
-      return phrase + punct; // ends with space
-    }
-
-    function splitTaggedPrefix(tagged) {
-      for (let i = 0; i < tagged.length - 1; i++) {
-        const c = tagged.charAt(i);
-        if ((c === "?" || c === "!") && tagged.charAt(i + 1) === " ") {
-          const prefix = tagged.slice(0, i + 1); // includes punct (no space)
-          const cipher = tagged.slice(i + 2);    // after "<punct><space>"
-          return cipher ? { prefix, cipher } : null;
-        }
-      }
+    // helper: choose which consonant ring to rotate in
+    function pickConSet(lc) {
+      if (CON_COMMON.includes(lc)) return CON_COMMON;
+      if (CON_RARE.includes(lc))   return CON_RARE;
       return null;
     }
 
-    async function ROT500K_PrefixTagged(name, password, iterations = 500000, salt = "NameFPE:v1", shiftPunctuation = true) {
-      const cipher = await transformNameNameLikeFPE(name, password, iterations, salt, +1);
-      const prefix = await buildTagPrefixForPlaintext(name, password, iterations, salt);
+    const VOW_LO_PT = "áàâãäéèêëíìîïóòôõöúùûü";
+    const VOW_UP_PT = "ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜ";
 
-      let out = prefix + cipher;
-      if (shiftPunctuation) out = await punctShiftApply(out, password, iterations, salt, +1);
-      return out;
+    const CON_LO_PT = "ç";
+    const CON_UP_PT = "Ç";
+
+    if (!s) return s;
+
+    const coreSalt = dsalt(salt, nonceB64u, "Core:v2");
+    const ks = await deriveKeyStream(password, coreSalt, iterations, s.length + 64);
+    let kpos = 0;
+
+    let out = "";
+    for (let i = 0; i < s.length; i++) {
+      const c = s.charAt(i);
+      if (isSeparator(c)) { out += c; continue; }
+
+      const shift = ((ks[kpos] | 0) + 1) * direction;
+      kpos++; if (kpos >= ks.length) kpos = 0;
+
+      if (isDigit(c)) {
+        const d = c.charCodeAt(0) - 48;
+        const nd = (d + (shift % 10) + 10) % 10;
+        out += String.fromCharCode(48 + nd);
+        continue;
+      }
+
+      const upper = isAsciiUpper(c) || (VOW_UP_PT.includes(c) || CON_UP_PT.includes(c));
+      let lc = c;
+      if (isAsciiUpper(lc)) lc = toLowerASCII(lc);
+
+      if (VOW_LO.includes(lc)) {
+        let ch = rotateInSetNoZero(VOW_LO, lc, shift);
+        if (upper) ch = toUpperASCII(ch);
+        out += ch;
+        continue;
+      }
+
+      const conSet = pickConSet(lc);
+      if (conSet) {
+        let ch = rotateInSetNoZero(conSet, lc, shift);
+        if (upper) ch = toUpperASCII(ch);
+        out += ch;
+        continue;
+      }
+
+      if (VOW_LO_PT.includes(c)) { out += rotateInSetNoZero(VOW_LO_PT, c, shift); continue; }
+      if (VOW_UP_PT.includes(c)) { out += rotateInSetNoZero(VOW_UP_PT, c, shift); continue; }
+      if (CON_LO_PT.includes(c)) { out += rotateInSetNoZero(CON_LO_PT, c, shift); continue; }
+      if (CON_UP_PT.includes(c)) { out += rotateInSetNoZero(CON_UP_PT, c, shift); continue; }
+
+      out += c;
+    }
+    return out;
+  }
+
+  // -----------------------------
+  // Optional punctuation shifting (only ¿¡ and !?), nonce-aware
+  // -----------------------------
+  const P_OPEN = "¿¡";
+  const P_END  = "!?";
+
+  function isShiftPunct(ch) { return P_OPEN.includes(ch) || P_END.includes(ch); }
+
+  async function punctShiftApply(s, password, iterations, salt, nonceB64u, direction) {
+    if (!s) return s;
+
+    let need = 0;
+    for (let i = 0; i < s.length; i++) if (isShiftPunct(s.charAt(i))) need++;
+    if (need === 0) return s;
+
+    const punctSalt = dsalt(salt, nonceB64u, "PunctShift:v2");
+    const ks = await deriveKeyStream(password, punctSalt, iterations, need + 64);
+    let kpos = 0;
+
+    let out = s.split("");
+    for (let i = 0; i < out.length; i++) {
+      const c = out[i];
+      if (!isShiftPunct(c)) continue;
+
+      const shift = ((ks[kpos] | 0) + 1) * direction;
+      kpos++; if (kpos >= ks.length) kpos = 0;
+
+      if (P_OPEN.includes(c)) out[i] = rotateInSetNoZero(P_OPEN, c, shift);
+      else out[i] = rotateInSetNoZero(P_END, c, shift);
+    }
+    return out.join("");
+  }
+
+  // ============================================================
+  // Verified modes: PBKDF2-derived HMAC key (nonce-aware)
+  // ============================================================
+  async function deriveHmacKeyFromPassword(password, baseSalt, iterations, nonceB64u, domain) {
+    const pwBytes = te.encode(password);
+    const saltBytes = te.encode(dsalt(baseSalt, nonceB64u, "HMACKey:" + domain));
+    const baseKey = await crypto.subtle.importKey("raw", pwBytes, "PBKDF2", false, ["deriveKey"]);
+    return crypto.subtle.deriveKey(
+      { name: "PBKDF2", hash: "SHA-256", salt: saltBytes, iterations: iterations },
+      baseKey,
+      { name: "HMAC", hash: "SHA-256", length: 256 },
+      false,
+      ["sign"]
+    );
+  }
+
+  async function hmacSha256BytesWithKey(hmacKey, msgStr) {
+    const msgBytes = te.encode(msgStr);
+    const sig = await crypto.subtle.sign("HMAC", hmacKey, msgBytes);
+    return new Uint8Array(sig);
+  }
+
+  // -----------------------------
+  // ROT500K2T (token-verified)
+  // -----------------------------
+  function isTokenSep(ch) {
+    return (
+      ch === " " || ch === "-" || ch === "'" ||
+      ch === "." || ch === "," || ch === "!" || ch === "?" ||
+      ch === ":" || ch === ";" ||
+      ch === "\t" || ch === "\n" || ch === "\r"
+    );
+  }
+
+  function isAllDigitsStr(s) {
+    if (!s) return false;
+    for (let i = 0; i < s.length; i++) if (!isDigit(s.charAt(i))) return false;
+    return true;
+  }
+
+  function isAllUpperASCII(s) {
+    let hasLetter = false;
+    for (let i = 0; i < s.length; i++) {
+      const c = s.charAt(i);
+      if (c >= "a" && c <= "z") return false;
+      if (c >= "A" && c <= "Z") hasLetter = true;
+    }
+    return hasLetter;
+  }
+
+  const CONSET = "bcdfghjklmnpqrstvwxyz";
+  const TOK_DOMAIN = "PhonoShiftTok2";
+
+  async function tokenDigest(hmacKey, salt, iterations, tokenIndex, tokenPlain, nonceB64u) {
+    const msg = `${TOK_DOMAIN}|${salt}|${iterations}|n=${nonceB64u}|${tokenIndex}|${tokenPlain}`;
+    return hmacSha256BytesWithKey(hmacKey, msg);
+  }
+
+  function makeTokenCheck(tokenPlain, kind, macBytes, checkCharsPerToken) {
+    const n = Math.max(1, checkCharsPerToken | 0);
+    const upperMode = (kind === "alpha") && isAllUpperASCII(tokenPlain);
+
+    let out = "";
+    for (let i = 0; i < n; i++) {
+      const b = macBytes[(i * 7) & 31];
+      if (kind === "digits") out += String.fromCharCode(48 + (b % 10));
+      else {
+        let ch = CONSET.charAt(b % CONSET.length);
+        if (upperMode) ch = ch.toUpperCase();
+        out += ch;
+      }
+    }
+    return out;
+  }
+
+  async function buildPlainTokenChecks(plain, hmacKey, salt, iterations, checkCharsPerToken, nonceB64u) {
+    const checks = [];
+    let tok = "";
+    let tokIdx = 0;
+
+    for (let i = 0; i < plain.length; i++) {
+      const c = plain.charAt(i);
+      if (isTokenSep(c)) {
+        if (tok) {
+          const kind = isAllDigitsStr(tok) ? "digits" : "alpha";
+          const mac = await tokenDigest(hmacKey, salt, iterations, tokIdx, tok, nonceB64u);
+          checks.push(makeTokenCheck(tok, kind, mac, checkCharsPerToken));
+          tokIdx++;
+          tok = "";
+        }
+      } else tok += c;
     }
 
-    async function ROT500K_PrefixTaggedDecrypt(tagged, password, iterations = 500000, salt = "NameFPE:v1", shiftPunctuation = true) {
-      let s = tagged;
-      if (shiftPunctuation) s = await punctShiftApply(s, password, iterations, salt, -1);
+    if (tok) {
+      const kind = isAllDigitsStr(tok) ? "digits" : "alpha";
+      const mac = await tokenDigest(hmacKey, salt, iterations, tokIdx, tok, nonceB64u);
+      checks.push(makeTokenCheck(tok, kind, mac, checkCharsPerToken));
+    }
+
+    return checks;
+  }
+
+  function attachChecksToCipher(cipher, checks) {
+    let out = "";
+    let tok = "";
+    let tokIdx = 0;
+
+    for (let i = 0; i < cipher.length; i++) {
+      const c = cipher.charAt(i);
+      if (isTokenSep(c)) {
+        if (tok) {
+          if (tokIdx >= checks.length) throw new Error("ROT500K2T: token/check count mismatch.");
+          out += tok + checks[tokIdx];
+          tokIdx++;
+          tok = "";
+        }
+        out += c;
+      } else tok += c;
+    }
+
+    if (tok) {
+      if (tokIdx >= checks.length) throw new Error("ROT500K2T: token/check count mismatch.");
+      out += tok + checks[tokIdx];
+      tokIdx++;
+    }
+    if (tokIdx !== checks.length) throw new Error("ROT500K2T: unused checks remain.");
+    return out;
+  }
+
+  function stripChecksFromTagged(tagged, checkCharsPerToken) {
+    const n = Math.max(1, checkCharsPerToken | 0);
+
+    let baseCipher = "";
+    const givenChecks = [];
+    let tok = "";
+
+    for (let i = 0; i < tagged.length; i++) {
+      const c = tagged.charAt(i);
+      if (isTokenSep(c)) {
+        if (tok) {
+          if (tok.length <= n) return null;
+          const chk = tok.slice(-n);
+          const baseTok = tok.slice(0, -n);
+          givenChecks.push(chk);
+          baseCipher += baseTok;
+          tok = "";
+        }
+        baseCipher += c;
+      } else tok += c;
+    }
+
+    if (tok) {
+      if (tok.length <= n) return null;
+      const chk = tok.slice(-n);
+      const baseTok = tok.slice(0, -n);
+      givenChecks.push(chk);
+      baseCipher += baseTok;
+    }
+
+    return { baseCipher, givenChecks };
+  }
+
+  async function ROT500K2T_Encrypt(name, password, iterations = 500000, salt = "NameFPE:v1", checkCharsPerToken = 1, shiftPunctuation = true) {
+    const nonceBytes = makeNonceBytes();
+    const nonceB64u = b64urlEncode(nonceBytes);
+
+    const cipher = await transformNameNameLikeFPE(name, password, iterations, salt, nonceB64u, +1);
+
+    const hmacKey = await deriveHmacKeyFromPassword(password, salt, iterations, nonceB64u, TOK_DOMAIN);
+    const checks = await buildPlainTokenChecks(name, hmacKey, salt, iterations, checkCharsPerToken, nonceB64u);
+
+    let out = attachChecksToCipher(cipher, checks);
+    if (shiftPunctuation) out = await punctShiftApply(out, password, iterations, salt, nonceB64u, +1);
+
+    const header = buildStealthFrame("ROT500K2T", nonceBytes);
+    return header + out;
+  }
+
+  async function ROT500K2T_Decrypt(tagged, password, iterations = 500000, salt = "NameFPE:v1", checkCharsPerToken = 1, shiftPunctuation = true) {
+    const u = parseStealthFrameAndPayload(tagged);
+    if (!u || u.modeStr !== "ROT500K2T") throw new Error("Invalid/legacy ciphertext (expected ROT500K2T stealth frame).");
+
+    let s = u.payload;
+    if (shiftPunctuation) s = await punctShiftApply(s, password, iterations, salt, u.nonceB64u, -1);
+
+    const stripped = stripChecksFromTagged(s, checkCharsPerToken);
+    if (!stripped) return { ok: false, value: "" };
+
+    const plain = await transformNameNameLikeFPE(stripped.baseCipher, password, iterations, salt, u.nonceB64u, -1);
+
+    const hmacKey = await deriveHmacKeyFromPassword(password, salt, iterations, u.nonceB64u, TOK_DOMAIN);
+    const expected = await buildPlainTokenChecks(plain, hmacKey, salt, iterations, checkCharsPerToken, u.nonceB64u);
+
+    if (expected.length !== stripped.givenChecks.length) return { ok: false, value: "" };
+    for (let i = 0; i < expected.length; i++) if (expected[i] !== stripped.givenChecks[i]) return { ok: false, value: "" };
+
+    return { ok: true, value: plain };
+  }
+
+  // -----------------------------
+  // ROT500K2P (prefix-verified)
+  // -----------------------------
+  const TAG_DOMAIN = "PhonoShiftTag2";
+
+  function onlyLettersASCIIOrPT(c) {
+    const pt = "áàâãäéèêëíìîïóòôõöúùûüÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜçÇ";
+    return (c >= "A" && c <= "Z") || (c >= "a" && c <= "z") || pt.includes(c);
+  }
+
+  function detectCaseStyle(plain) {
+    let hasLetter = false, anyUpper = false, anyLower = false;
+    for (let i = 0; i < plain.length; i++) {
+      const c = plain.charAt(i);
+      if (!onlyLettersASCIIOrPT(c)) continue;
+      hasLetter = true;
+      if (c >= "A" && c <= "Z") anyUpper = true;
+      else if (c >= "a" && c <= "z") anyLower = true;
+      else { anyUpper = true; anyLower = true; }
+    }
+    if (!hasLetter) return "title";
+    if (anyUpper && !anyLower) return "upper";
+    if (anyLower && !anyUpper) return "lower";
+    return "title";
+  }
+
+  function applyCaseStyleToWord(w, style) {
+    if (!w) return w;
+    if (style === "upper") return w.toUpperCase();
+    if (style === "lower") return w.toLowerCase();
+    const low = w.toLowerCase();
+    return low.charAt(0).toUpperCase() + low.slice(1);
+  }
+
+  function applyCaseStyleToPhrase(phrase, style) {
+    return phrase.split(" ").map(p => applyCaseStyleToWord(p, style)).join(" ");
+  }
+
+  function makePronounceableWordFromBytes(bytes, offset, syllables) {
+    const CSet = "bcdfghjklmnpqrstvwxyz";
+    const VSet = "aeiou";
+    let out = "";
+    for (let i = 0; i < syllables; i++) {
+      const x = bytes[(offset + i) & 31];
+      const cIdx = x % CSet.length;
+      const vIdx = Math.floor(x / CSet.length) % VSet.length;
+      out += CSet.charAt(cIdx) + VSet.charAt(vIdx);
+    }
+    return out;
+  }
+
+  function pickPunctFromBytes(bytes) {
+    const puncts = ["? ", "! "];
+    return puncts[bytes[0] % puncts.length];
+  }
+
+  async function buildTagPrefixForPlaintext(plain, password, iterations, salt, nonceB64u) {
+    const hmacKey = await deriveHmacKeyFromPassword(password, salt, iterations, nonceB64u, TAG_DOMAIN);
+    const msg = `${TAG_DOMAIN}|${salt}|${iterations}|n=${nonceB64u}|${plain}`;
+    const mac = await hmacSha256BytesWithKey(hmacKey, msg);
+
+    const w1 = makePronounceableWordFromBytes(mac, 1, 3);
+    const w2 = makePronounceableWordFromBytes(mac, 4, 3);
+    let phrase = `${w1} ${w2}`;
+
+    const punct = pickPunctFromBytes(mac);
+    const style = detectCaseStyle(plain);
+    phrase = applyCaseStyleToPhrase(phrase, style);
+
+    return phrase + punct; // ends with space
+  }
+
+  function splitTaggedPrefix(tagged) {
+    for (let i = 0; i < tagged.length - 1; i++) {
+      const c = tagged.charAt(i);
+      if ((c === "?" || c === "!") && tagged.charAt(i + 1) === " ") {
+        const prefix = tagged.slice(0, i + 1);
+        const cipher = tagged.slice(i + 2);
+        return cipher ? { prefix, cipher } : null;
+      }
+    }
+    return null;
+  }
+
+  async function ROT500K2P_Encrypt(name, password, iterations = 500000, salt = "NameFPE:v1", shiftPunctuation = true) {
+    const nonceBytes = makeNonceBytes();
+    const nonceB64u = b64urlEncode(nonceBytes);
+
+    const cipher = await transformNameNameLikeFPE(name, password, iterations, salt, nonceB64u, +1);
+    const prefix = await buildTagPrefixForPlaintext(name, password, iterations, salt, nonceB64u);
+
+    let out = prefix + cipher;
+    if (shiftPunctuation) out = await punctShiftApply(out, password, iterations, salt, nonceB64u, +1);
+
+    const header = buildStealthFrame("ROT500K2P", nonceBytes);
+    return header + out;
+  }
+
+  async function ROT500K2P_Decrypt(tagged, password, iterations = 500000, salt = "NameFPE:v1", shiftPunctuation = true) {
+    const u = parseStealthFrameAndPayload(tagged);
+    if (!u || u.modeStr !== "ROT500K2P") throw new Error("Invalid/legacy ciphertext (expected ROT500K2P stealth frame).");
+
+    let s = u.payload;
+    if (shiftPunctuation) s = await punctShiftApply(s, password, iterations, salt, u.nonceB64u, -1);
+
+    const parsed = splitTaggedPrefix(s);
+    if (!parsed) return { ok: false, value: "" };
+
+    const plain = await transformNameNameLikeFPE(parsed.cipher, password, iterations, salt, u.nonceB64u, -1);
+    const expected = await buildTagPrefixForPlaintext(plain, password, iterations, salt, u.nonceB64u);
+
+    const expectedPrefixNoSpace = expected.slice(0, expected.length - 1);
+    if (expectedPrefixNoSpace !== parsed.prefix) return { ok: false, value: "" };
+
+    return { ok: true, value: plain };
+  }
+
+  // -----------------------------
+  // Base: ROT500K2 (no verification) — tolerant frame detection
+  // -----------------------------
+  async function ROT500K2_Encrypt(name, password, iterations = 500000, salt = "NameFPE:v1", shiftPunctuation = true) {
+    const nonceBytes = makeNonceBytes();
+    const nonceB64u = b64urlEncode(nonceBytes);
+
+    let r = await transformNameNameLikeFPE(name, password, iterations, salt, nonceB64u, +1);
+    if (shiftPunctuation) r = await punctShiftApply(r, password, iterations, salt, nonceB64u, +1);
+
+    const header = buildStealthFrame("ROT500K2", nonceBytes);
+    return header + r;
+  }
+
+  async function ROT500K2_Decrypt(obfuscated, password, iterations = 500000, salt = "NameFPE:v1", shiftPunctuation = true) {
+    const u = parseStealthFrameAndPayloadTolerant(obfuscated, "ROT500K2");
+    if (!u) throw new Error("Invalid/legacy ciphertext (expected ROT500K2 stealth frame).");
+
+    let s = u.payload;
+    if (shiftPunctuation) s = await punctShiftApply(s, password, iterations, salt, u.nonceB64u, -1);
+    return transformNameNameLikeFPE(s, password, iterations, salt, u.nonceB64u, -1);
+  }
+
+  // -----------------------------
+  // ROT500K2V (auto verified): chooses T or P based on plaintext
+  // -----------------------------
+  function containsStructuredDelimiters(s) {
+    for (let i = 0; i < s.length; i++) {
+      const c = s.charAt(i);
+      if (c === "{" || c === "}" || c === "[" || c === "]" || c === '"' ||
+          c === "\\" || c === "<" || c === ">" || c === "=" || c === ":") {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function countTokensSimple(s) {
+    let count = 0, inTok = false;
+    for (let i = 0; i < s.length; i++) {
+      if (isTokenSep(s.charAt(i))) inTok = false;
+      else if (!inTok) { count++; inTok = true; }
+    }
+    return count;
+  }
+
+  function minTokenLenSimple(s) {
+    let min = Infinity, cur = 0, inTok = false;
+    for (let i = 0; i < s.length; i++) {
+      const c = s.charAt(i);
+      if (isTokenSep(c)) {
+        if (inTok) min = Math.min(min, cur);
+        cur = 0; inTok = false;
+      } else {
+        inTok = true; cur++;
+      }
+    }
+    if (inTok) min = Math.min(min, cur);
+    return min === Infinity ? 0 : min;
+  }
+
+  function shouldUseTokenTagged(plain, checkCharsPerToken) {
+    const n = Math.max(1, checkCharsPerToken | 0);
+    if (containsStructuredDelimiters(plain)) return false;
+    const tokCount = countTokensSimple(plain);
+    const minLen = minTokenLenSimple(plain);
+    return tokCount >= 2 && minLen > n && plain.length >= 6;
+  }
+
+  async function ROT500K2V_SafeEncrypt(name, password, iterations, salt, checkCharsPerToken, shiftPunctuation) {
+    if (shouldUseTokenTagged(name, checkCharsPerToken)) {
+      const nonceBytes = makeNonceBytes();
+      const nonceB64u = b64urlEncode(nonceBytes);
+
+      const cipher = await transformNameNameLikeFPE(name, password, iterations, salt, nonceB64u, +1);
+      const hmacKey = await deriveHmacKeyFromPassword(password, salt, iterations, nonceB64u, TOK_DOMAIN);
+      const checks = await buildPlainTokenChecks(name, hmacKey, salt, iterations, checkCharsPerToken, nonceB64u);
+
+      let out = attachChecksToCipher(cipher, checks);
+      if (shiftPunctuation) out = await punctShiftApply(out, password, iterations, salt, nonceB64u, +1);
+
+      const header = buildStealthFrame("ROT500K2V", nonceBytes);
+      return header + out;
+    }
+
+    const nonceBytes = makeNonceBytes();
+    const nonceB64u = b64urlEncode(nonceBytes);
+
+    const cipher = await transformNameNameLikeFPE(name, password, iterations, salt, nonceB64u, +1);
+    const prefix = await buildTagPrefixForPlaintext(name, password, iterations, salt, nonceB64u);
+
+    let out = prefix + cipher;
+    if (shiftPunctuation) out = await punctShiftApply(out, password, iterations, salt, nonceB64u, +1);
+
+    const header = buildStealthFrame("ROT500K2V", nonceBytes);
+    return header + out;
+  }
+
+  async function ROT500K2V_SafeDecrypt(obfuscated, password, iterations, salt, checkCharsPerToken, shiftPunctuation) {
+    const u = parseStealthFrameAndPayload(obfuscated);
+    if (!u || u.modeStr !== "ROT500K2V") return { ok: false, value: "" };
+
+    // Try T
+    try {
+      let s = u.payload;
+      if (shiftPunctuation) s = await punctShiftApply(s, password, iterations, salt, u.nonceB64u, -1);
+
+      const stripped = stripChecksFromTagged(s, checkCharsPerToken);
+      if (stripped) {
+        const plain = await transformNameNameLikeFPE(stripped.baseCipher, password, iterations, salt, u.nonceB64u, -1);
+        const hmacKey = await deriveHmacKeyFromPassword(password, salt, iterations, u.nonceB64u, TOK_DOMAIN);
+        const expected = await buildPlainTokenChecks(plain, hmacKey, salt, iterations, checkCharsPerToken, u.nonceB64u);
+
+        if (expected.length === stripped.givenChecks.length) {
+          let ok = true;
+          for (let i = 0; i < expected.length; i++) if (expected[i] !== stripped.givenChecks[i]) { ok = false; break; }
+          if (ok) return { ok: true, value: plain };
+        }
+      }
+    } catch {}
+
+    // Try P
+    try {
+      let s = u.payload;
+      if (shiftPunctuation) s = await punctShiftApply(s, password, iterations, salt, u.nonceB64u, -1);
 
       const parsed = splitTaggedPrefix(s);
       if (!parsed) return { ok: false, value: "" };
 
-      const plain = await transformNameNameLikeFPE(parsed.cipher, password, iterations, salt, -1);
-      const expected = await buildTagPrefixForPlaintext(plain, password, iterations, salt);
+      const plain = await transformNameNameLikeFPE(parsed.cipher, password, iterations, salt, u.nonceB64u, -1);
+      const expected = await buildTagPrefixForPlaintext(plain, password, iterations, salt, u.nonceB64u);
 
-      const expectedPrefixNoSpace = expected.slice(0, expected.length - 1); // remove trailing space
-      if (expectedPrefixNoSpace !== parsed.prefix) return { ok: false, value: "" };
+      const expectedPrefixNoSpace = expected.slice(0, expected.length - 1);
+      if (expectedPrefixNoSpace === parsed.prefix) return { ok: true, value: plain };
+    } catch {}
 
-      return { ok: true, value: plain };
+    return { ok: false, value: "" };
+  }
+
+  async function ROT500K2V(name, password, iterations = 500000, salt = "NameFPE:v1", checkCharsPerToken = 1, shiftPunctuation = true) {
+    const u = parseStealthFrameAndPayload(name);
+    if (u && u.modeStr === "ROT500K2V") {
+      const r = await ROT500K2V_SafeDecrypt(name, password, iterations, salt, checkCharsPerToken, shiftPunctuation);
+      if (r.ok) return r.value;
     }
 
-    // -----------------------------
-    // ROT500KV (verified auto-select)
-    // -----------------------------
-    function containsStructuredDelimiters(s) {
-      for (let i = 0; i < s.length; i++) {
-        const c = s.charAt(i);
-        if (c === "{" || c === "}" || c === "[" || c === "]" || c === '"' ||
-            c === "\\" || c === "<" || c === ">" || c === "=" || c === ":") {
-          return true;
-        }
-      }
-      return false;
+    let eff = Math.max(1, checkCharsPerToken | 0);
+    if (name.length < 12) eff = Math.max(eff, 2);
+    if (name.length < 6)  eff = Math.max(eff, 3);
+
+    return ROT500K2V_SafeEncrypt(name, password, iterations, salt, eff, shiftPunctuation);
+  }
+
+  async function ROT500K2V_Decrypt(obfuscated, password, iterations = 500000, salt = "NameFPE:v1", checkCharsPerToken = 1, shiftPunctuation = true) {
+    return ROT500K2V_SafeDecrypt(obfuscated, password, iterations, salt, checkCharsPerToken, shiftPunctuation);
+  }
+
+  // ============================================================
+  // UI wiring
+  // ============================================================
+
+  const $ = (id) => document.getElementById(id);
+  const btnEnc = $("btnEnc");
+  const btnDec = $("btnDec");
+  const btnSwap = $("btnSwap");
+  const statusEl = $("status");
+
+  function setBusy(b) {
+    btnEnc.disabled = b;
+    btnDec.disabled = b;
+    btnSwap.disabled = b;
+  }
+
+  function status(msg, ok = null) {
+    if (ok === true) statusEl.innerHTML = `<span class="ok">${msg}</span>`;
+    else if (ok === false) statusEl.innerHTML = `<span class="bad">${msg}</span>`;
+    else statusEl.textContent = msg;
+  }
+
+  function getParams() {
+    const mode = $("mode").value;
+    const name = $("name").value;
+    const pw = $("password").value;
+    const it = Math.max(1, parseInt($("iterations").value || "1", 10));
+    const salt = $("salt").value || "NameFPE:v1";
+    const cc = Math.max(1, parseInt($("checkChars").value || "1", 10));
+    const sp = $("shiftPunct").checked;
+    return { mode, name, pw, it, salt, cc, sp };
+  }
+
+  async function doEncode() {
+    const { mode, name, pw, it, salt, cc, sp } = getParams();
+    if (mode === "ROT500K2")  return ROT500K2_Encrypt(name, pw, it, salt, sp);
+    if (mode === "ROT500K2P") return ROT500K2P_Encrypt(name, pw, it, salt, sp);
+    if (mode === "ROT500K2T") return ROT500K2T_Encrypt(name, pw, it, salt, cc, sp);
+    return ROT500K2V(name, pw, it, salt, cc, sp);
+  }
+
+  async function doDecode() {
+    const { mode, name, pw, it, salt, cc, sp } = getParams();
+
+    if (mode === "ROT500K2") {
+      const dec = await ROT500K2_Decrypt(name, pw, it, salt, sp);
+      return { ok: true, value: dec, verified: false };
     }
-
-    function countTokensSimple(s) {
-      let count = 0, inTok = false;
-      for (let i = 0; i < s.length; i++) {
-        if (isTokenSep(s.charAt(i))) inTok = false;
-        else if (!inTok) { count++; inTok = true; }
-      }
-      return count;
-    }
-
-    function minTokenLenSimple(s) {
-      let min = Infinity, cur = 0, inTok = false;
-      for (let i = 0; i < s.length; i++) {
-        const c = s.charAt(i);
-        if (isTokenSep(c)) {
-          if (inTok) min = Math.min(min, cur);
-          cur = 0; inTok = false;
-        } else {
-          inTok = true; cur++;
-        }
-      }
-      if (inTok) min = Math.min(min, cur);
-      return min === Infinity ? 0 : min;
-    }
-
-    function shouldUseTokenTagged(plain, checkCharsPerToken) {
-      const n = Math.max(1, checkCharsPerToken | 0);
-
-      if (containsStructuredDelimiters(plain)) return false;
-
-      const tokCount = countTokensSimple(plain);
-      const minLen = minTokenLenSimple(plain);
-
-      return tokCount >= 2 && minLen > n && plain.length >= 6;
-    }
-
-    // Heuristic ciphertext classifier
-    function looksLikeRot500KCipher(s, checkCharsPerToken) {
-      const N = Math.max(1, checkCharsPerToken | 0);
-      if (!s) return false;
-
-      // trim WS
-      const trimmed = s.replace(/^[ \t\r\n]+|[ \t\r\n]+$/g, "");
-      if (!trimmed) return false;
-
-      function isAsciiLetter(ch) {
-        return (ch >= "A" && ch <= "Z") || (ch >= "a" && ch <= "z");
-      }
-
-      function isConsonantAscii(ch) {
-        const low = (ch >= "A" && ch <= "Z") ? String.fromCharCode(ch.charCodeAt(0) | 0x20) : ch;
-        return "bcdfghjklmnpqrstvwxyz".includes(low);
-      }
-
-      function looksLikeKpPrefixAtStart(x) {
-        let punctPos = 0;
-        for (let i = 0; i < x.length - 1 && i <= 48; i++) {
-          if ((x[i] === "?" || x[i] === "!") && x[i + 1] === " ") {
-            punctPos = i + 1; // 1-based-ish not needed
-            // require at least one space before punct
-            const a = x.lastIndexOf(" ", i);
-            if (a < 0) return false;
-
-            // tag region mostly letters/spaces/-/'
-            for (let p = 0; p < i; p++) {
-              const ch = x[p];
-              if (!isAsciiLetter(ch) && ch !== " " && ch !== "-" && ch !== "'") return false;
-            }
-            return true;
-          }
-        }
-        return false;
-      }
-
-      function looksLikeKtTokenTagged(x) {
-        let tok = "";
-        let good = 0, total = 0;
-
-        function finishToken() {
-          if (!tok) return;
-          total++;
-          if (tok.length > N) {
-            const suf = tok.slice(-N);
-            let okDigits = true, okCons = true;
-            for (let j = 0; j < suf.length; j++) {
-              const ch = suf[j];
-              if (!(ch >= "0" && ch <= "9")) okDigits = false;
-              if (!isConsonantAscii(ch)) okCons = false;
-            }
-            if (okDigits || okCons) good++;
-          }
-        }
-
-        for (let i = 0; i < x.length; i++) {
-          const c = x[i];
-          if (isTokenSep(c)) { finishToken(); tok = ""; }
-          else tok += c;
-        }
-        finishToken();
-
-        if (total < 2) return false;
-        return Math.floor((good * 100) / total) >= 70;
-      }
-
-      if (looksLikeKpPrefixAtStart(trimmed)) return true;
-      if (looksLikeKtTokenTagged(trimmed)) return true;
-      return false;
-    }
-
-    async function ROT500KV_SafeEncrypt(name, password, iterations, salt, checkCharsPerToken, shiftPunctuation) {
-      if (shouldUseTokenTagged(name, checkCharsPerToken)) {
-        return ROT500K_TokenTagged(name, password, iterations, salt, checkCharsPerToken, shiftPunctuation);
-      }
-      return ROT500K_PrefixTagged(name, password, iterations, salt, shiftPunctuation);
-    }
-
-    async function ROT500KV_SafeDecrypt(obfuscated, password, iterations, salt, checkCharsPerToken, shiftPunctuation) {
-      const kt = await ROT500K_TokenTaggedDecrypt(obfuscated, password, iterations, salt, checkCharsPerToken, shiftPunctuation);
-      if (kt.ok) return kt;
-
-      const kp = await ROT500K_PrefixTaggedDecrypt(obfuscated, password, iterations, salt, shiftPunctuation);
-      if (kp.ok) return kp;
-
-      return { ok: false, value: "" };
-    }
-
-    async function ROT500KV(name, password, iterations = 500000, salt = "NameFPE:v1", checkCharsPerToken = 1, shiftPunctuation = true) {
-      // 0) refuse to double-encrypt: try decrypt first if it looks like ciphertext
-      if (looksLikeRot500KCipher(name, checkCharsPerToken)) {
-        const r = await ROT500KV_SafeDecrypt(name, password, iterations, salt, checkCharsPerToken, shiftPunctuation);
-        if (r.ok) return r.value;
-        // else fall through: treat as plaintext and encrypt
-      }
-
-      // 1) adaptive hardening for ENCRYPTION only (length-based)
-      let eff = Math.max(1, checkCharsPerToken | 0);
-      if (name.length < 12) eff = Math.max(eff, 2);
-      if (name.length < 6)  eff = Math.max(eff, 3);
-
-      // 2) encrypt
-      return ROT500KV_SafeEncrypt(name, password, iterations, salt, eff, shiftPunctuation);
-    }
-
-    async function ROT500KV_Decrypt(obfuscated, password, iterations = 500000, salt = "NameFPE:v1", checkCharsPerToken = 1, shiftPunctuation = true) {
-      return ROT500KV_SafeDecrypt(obfuscated, password, iterations, salt, checkCharsPerToken, shiftPunctuation);
-    }
-
-    // -----------------------------
-    // UI wiring
-    // -----------------------------
-    const $ = (id) => document.getElementById(id);
-    const btnEnc = $("btnEnc");
-    const btnDec = $("btnDec");
-    const btnSwap = $("btnSwap");
-    const statusEl = $("status");
-
-    function setBusy(b) {
-      btnEnc.disabled = b;
-      btnDec.disabled = b;
-      btnSwap.disabled = b;
-    }
-
-    function status(msg, ok = null) {
-      if (ok === true) statusEl.innerHTML = `<span class="ok">${msg}</span>`;
-      else if (ok === false) statusEl.innerHTML = `<span class="bad">${msg}</span>`;
-      else statusEl.textContent = msg;
-    }
-
-    function getParams() {
-      const mode = $("mode").value;
-      const name = $("name").value;
-      const pw = $("password").value;
-      const it = Math.max(1, parseInt($("iterations").value || "1", 10));
-      const salt = $("salt").value || "NameFPE:v1";
-      const cc = Math.max(1, parseInt($("checkChars").value || "1", 10));
-      const sp = $("shiftPunct").checked;
-      return { mode, name, pw, it, salt, cc, sp };
-    }
-
-    async function doEncode() {
-      const { mode, name, pw, it, salt, cc, sp } = getParams();
-      if (mode === "ROT500K") return ROT500K_Encrypt(name, pw, it, salt, sp);
-      if (mode === "ROT500KP") return ROT500K_PrefixTagged(name, pw, it, salt, sp);
-      if (mode === "ROT500KT") return ROT500K_TokenTagged(name, pw, it, salt, cc, sp);
-      return ROT500KV(name, pw, it, salt, cc, sp);
-    }
-
-    async function doDecode() {
-      const { mode, name, pw, it, salt, cc, sp } = getParams();
-      if (mode === "ROT500K") {
-        const dec = await ROT500K_Decrypt(name, pw, it, salt, sp);
-        return { ok: true, value: dec, verified: false };
-      }
-      if (mode === "ROT500KP") {
-        const r = await ROT500K_PrefixTaggedDecrypt(name, pw, it, salt, sp);
-        return { ok: r.ok, value: r.value, verified: true };
-      }
-      if (mode === "ROT500KT") {
-        const r = await ROT500K_TokenTaggedDecrypt(name, pw, it, salt, cc, sp);
-        return { ok: r.ok, value: r.value, verified: true };
-      }
-      const r = await ROT500KV_Decrypt(name, pw, it, salt, cc, sp);
+    if (mode === "ROT500K2P") {
+      const r = await ROT500K2P_Decrypt(name, pw, it, salt, sp);
       return { ok: r.ok, value: r.value, verified: true };
     }
+    if (mode === "ROT500K2T") {
+      const r = await ROT500K2T_Decrypt(name, pw, it, salt, cc, sp);
+      return { ok: r.ok, value: r.value, verified: true };
+    }
+    const r = await ROT500K2V_Decrypt(name, pw, it, salt, cc, sp);
+    return { ok: r.ok, value: r.value, verified: true };
+  }
 
-    btnEnc.addEventListener("click", async () => {
-      try {
-        setBusy(true);
-        status("Encoding… (PBKDF2/HMAC can take a moment)");
-        const t0 = performance.now();
-        const enc = await doEncode();
-        const t1 = performance.now();
-        $("out").value = enc;
+  btnEnc.addEventListener("click", async () => {
+    try {
+      setBusy(true);
+      status("Encoding… (PBKDF2/HMAC can take a moment)");
+      const t0 = performance.now();
+      const enc = await doEncode();
+      const t1 = performance.now();
+      $("out").value = enc;
+      status(`Done in ${Math.round(t1 - t0)} ms.`, true);
+    } catch (e) {
+      console.error(e);
+      status("Error: " + (e && e.message ? e.message : String(e)), false);
+    } finally {
+      setBusy(false);
+    }
+  });
 
-        const { mode, pw, it, salt, sp } = getParams();
-        if (mode === "ROT500K") {
-          const dec = await ROT500K_Decrypt(enc, pw, it, salt, sp);
-          status(`Done in ${Math.round(t1 - t0)} ms. Self-check: OK`, dec === $("name").value);
-        } else {
-          status(`Done in ${Math.round(t1 - t0)} ms.`, true);
-        }
-      } catch (e) {
-        console.error(e);
-        status("Error: " + (e && e.message ? e.message : String(e)), false);
-      } finally {
-        setBusy(false);
+  btnDec.addEventListener("click", async () => {
+    try {
+      setBusy(true);
+      status("Decoding…");
+      const t0 = performance.now();
+      const r = await doDecode();
+      const t1 = performance.now();
+
+      $("out").value = r.value || "";
+
+      if (!r.verified) {
+        status(`Done in ${Math.round(t1 - t0)} ms. (No verification in ROT500K2)`, true);
+      } else {
+        status(`Done in ${Math.round(t1 - t0)} ms. Verified: ${r.ok ? "OK" : "FAILED"}`, r.ok);
       }
+    } catch (e) {
+      console.error(e);
+      status("Error: " + (e && e.message ? e.message : String(e)), false);
+    } finally {
+      setBusy(false);
+    }
+  });
+
+  btnSwap.addEventListener("click", () => {
+    const a = $("name").value;
+    $("name").value = $("out").value;
+    $("out").value = a;
+    status("Swapped.");
+  });
+
+  document.querySelectorAll(".tabbtn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".tabbtn").forEach(b => b.classList.remove("active"));
+      document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+      btn.classList.add("active");
+      document.getElementById(btn.dataset.tab).classList.add("active");
     });
-
-    btnDec.addEventListener("click", async () => {
-      try {
-        setBusy(true);
-        status("Decoding…");
-        const t0 = performance.now();
-        const r = await doDecode();
-        const t1 = performance.now();
-
-        $("out").value = r.value || "";
-
-        if (!r.verified) {
-          status(`Done in ${Math.round(t1 - t0)} ms. (No verification in ROT500K)`, true);
-        } else {
-          status(`Done in ${Math.round(t1 - t0)} ms. Verified: ${r.ok ? "OK" : "FAILED"}`, r.ok);
-        }
-      } catch (e) {
-        console.error(e);
-        status("Error: " + (e && e.message ? e.message : String(e)), false);
-      } finally {
-        setBusy(false);
-      }
-    });
-
-    btnSwap.addEventListener("click", () => {
-      const a = $("name").value;
-      $("name").value = $("out").value;
-      $("out").value = a;
-      status("Swapped.");
-    });
-
-    // Tabs
-    document.querySelectorAll(".tabbtn").forEach(btn => {
-      btn.addEventListener("click", () => {
-        document.querySelectorAll(".tabbtn").forEach(b => b.classList.remove("active"));
-        document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
-        btn.classList.add("active");
-        document.getElementById(btn.dataset.tab).classList.add("active");
-      });
-    });
-  })();
-  </script>
+  });
+})();
+</script>
 </body>
 </html>

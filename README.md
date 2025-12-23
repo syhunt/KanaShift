@@ -35,19 +35,17 @@ The browser implementation serves as the reference design; other implementations
 
 ----
 
-### Example Outputs with Default Settings — “Rio de Janeiro”
+### Example Outputs with Default Settings — “Rio”
 
-| Family | Scheme      | Input            | Output                          |
-|--------|-------------|------------------|---------------------------------|
-| Phono  | ROT500K     | Rio de Janeiro   | Noi lo Lusaomi                  |
-| Phono  | ROT500KT    | Rio de Janeiro   | Noiq lon Lusaomil               |
-| Phono  | ROT500KP    | Rio de Janeiro   | Calodi Wuzifi? Noi lo Lusaomi   |
-| Kana   | KAN500K     | Rio de Janeiro   | ナうう てえ テおのあえとう         |
-| Kana   | KAN500KT    | Rio de Janeiro   | ナううち てえほ テおのあえとうに    |
-| Kana JP| KAN500KJP   | Rio de Janeiro   | Fuu fa Sepuima                  |
-| Kana JP| KAN500KJP   | リオデジャネイロ | ヅケヺヲカハルゲ                  |
-| Kana JP| KAN500KJPT  | Rio de Janeiro   | Fuuの faと Sepuimaそ            |
-| Kana JP| KAN500KJPT  | リオデジャネイロ | ヅケヺヲカハルゲと                |
+| Family  | Scheme        | Input | Output                                                                 |
+|---------|---------------|-------|------------------------------------------------------------------------|
+| Kana    | KAN500K2      | Rio   | まによわやるんチえひふみけちなタひケんきセえお           |
+| Kana    | KAN500K2T     | Rio   | セをはむたコはちぬクスすとケちめセとウエソおえな           |
+| Kana JP | KAN500K2JP    | リオ  | てらをならよむぬすきをかくるはイうきのるブダ               |
+| Kana JP | KAN500K2JPT   | リオ  | んれタすとはかふつるまみおうひつかうしさクゲす               |
+| Phono   | ROT500K2      | Rio   | Curcuscur dur'bel culpin; ken-leskon; pas canjol hal jon kan; kus; Vae   |
+| Phono   | ROT500K2T     | Rio   | Karker kasnar hus'mir bel'cus mon-pen leshes'con gun-merfun jol mer; bon — Beuk |
+| Phono   | ROT500K2P     | Rio   | Nen-ninnes — mon fel. mol'nes., lanker jer der honmes ken-dolhes kaldelmer Soyobu Rerofo? Kee |
 
 Verified variants (KT, KJPT, KP) append additional characters to enable detection of incorrect passwords during decoding.
 
@@ -56,6 +54,34 @@ For example, “Anna” may encode to イつてう, which Google Translate rende
 Latin text becomes Japanese-looking, and Japanese text remains Japanese-looking but unreadable to native speakers.
 
 The salt value (e.g. `NameFPE:v1`) acts as a domain and version separator rather than a per-message secret, ensuring keystreams are bound to this specific algorithm and version.
+
+---
+
+## Version Note — ROT500K2 / KAN500K2 (V2)
+
+> This project uses a V2 generation format (`ROT500K2`, `KAN500K2`, and variants).  
+> Earlier `ROT500K / KAN500K` formats are considered legacy.
+
+### What’s new in V2
+
+- **Per-message nonce**  
+  Prevents keystream reuse across messages encrypted with the same password.
+
+- **PBKDF2-derived HMAC keys (verified modes)**  
+  Verification no longer uses a fast HMAC directly on the password, preventing oracle attacks that bypass PBKDF2 cost.
+
+- **Stealth framing**  
+  No fixed headers, colons, or magic strings.  
+  Mode and nonce are encoded as pronounceable, human-looking text.
+
+- **Strict decoding by default**  
+  Verified modes require an exact `ROT500K2 / KAN500K2` frame; base modes allow tolerant frame detection.
+
+> Recommendation: use `ROT500K2 / KAN500K2` for all new data.
+
+### Acknowledgment
+
+Thanks to **Sea-Cardiologist-954** for identifying a critical weakness in v1. KAN500K2 / ROT500K2 addresses keystream-reuse attacks present in v1 by introducing a per-message random nonce that is mixed into PBKDF2 salt derivation. As a result, chosen-plaintext or known-plaintext observations from one message do not apply to any other message encrypted with the same password.
 
 ---
 
@@ -117,7 +143,7 @@ deployments (for example, cost factor 12), without claiming the same security pr
 - Optional punctuation swapping (role-sets, position-preserving)
 
 **Modes:**  
-`ROT500K` (base), `ROT500KT` (token-verified), `ROT500KP` (prefix-verified), `ROT500KV` (auto)
+`ROT500K2` (base), `ROT500K2T` (token-verified), `ROT500K2P` (prefix-verified), `ROT500K2V` (auto)
 
 ---
 
@@ -134,7 +160,7 @@ deployments (for example, cost factor 12), without claiming the same security pr
   kana stay kana, kanji stay kanji-like; embedded ASCII also obfuscated
 
 **Modes:**  
-`KAN500K`, `KAN500KT`, `KAN500KJP`, `KAN500KJPT`
+`KAN500K2`, `KAN500K2T`, `KAN500K2JP`, `KAN500K2JPT`
 
 ---
 
@@ -161,7 +187,7 @@ For the Rust implementation, performance measurements assume a release build, as
 
 ### Quick Pick
 
-- Stay Latin and same length → PhonoShift / ROT500K
+- Stay Latin → PhonoShift / ROT500K
 - Need verification → ROT500KV
 - Want strong visual disguise → KanaShift
 - Mixed JP + EN text → KAN500KJP

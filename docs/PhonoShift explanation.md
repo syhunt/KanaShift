@@ -1,19 +1,23 @@
-# ROT500K Family (PhonoShift): Keyed, format-preserving obfuscation with adaptive verification
+# ROT500K2 Family (PhonoShift): Keyed, format-preserving obfuscation with adaptive verification
 
 ## Abstract
 
-**PhonoShift**, implemented as the **ROT500K family**, is a keyed, reversible, **format-preserving obfuscation** scheme for human-readable text. ROT500K applies **polyalphabetic, class-preserving rotations** to characters using a keystream derived from **PBKDF2-HMAC-SHA-256** (default **500,000 iterations**, hence “500K”). The result is text that remains structurally usable (same delimiters, similar readability properties) while hiding meaning in a deterministic, password-controlled way.
+**PhonoShift**, implemented as the **ROT500K2 family**, is a keyed, reversible, **format-preserving obfuscation** scheme for human-readable text. ROT500K2 applies **polyalphabetic, class-preserving rotations** to characters using keystream material derived from **PBKDF2-HMAC-SHA-256** (default **500,000 iterations**, hence “500K”).
 
-The family contains a base transform that keeps length unchanged (**ROT500K**) and verified variants that **embed a verification signal** so decode can return a definitive **OK/FAILED** under incorrect parameters (**ROT500KV**, **ROT500KT**, **ROT500KP**). A small offline demo UI exists as a wrapper around these modes, but the design is independent of any UI.
+Version **2.x** introduces a **per-message nonce embedded in a stealth frame**, mixed into all PBKDF2 salt derivations. This prevents keystream reuse across messages, even when the same password, salt, and iteration count are reused.
+
+The result is text that remains structurally usable (same delimiters, similar readability properties) while hiding meaning in a deterministic, password-controlled way. Verified variants embed a **verification signal** so decode can return a definitive **OK / FAILED** result under incorrect parameters (**ROT500K2V**, **ROT500K2T**, **ROT500K2P**).
+
+A small offline demo UI exists as a wrapper around these modes, but the design is independent of any UI.
 
 ___
 
 ## Design goals
 
-ROT500K targets scenarios where you want “scrambled but still text-like” output:
+ROT500K2 targets scenarios where you want “scrambled but still text-like” output:
 
 1.  **Reversible, keyed obfuscation**  
-    Same _(password, salt, iterations)_ yields correct decoding.
+    The same _(password, salt, iterations)_ produces correct decoding.
     
 2.  **Format preservation**  
     Separators such as **space**, **\-**, and **'** remain fixed so token boundaries are stable.
@@ -27,35 +31,54 @@ ROT500K targets scenarios where you want “scrambled but still text-like” out
     -   vowels rotate within vowels
         
     -   consonants rotate within consonants  
-        This avoids outputs that look like random noise and helps preserve a “word-like” texture.
+        This avoids outputs that look like random noise and preserves a “word-like” texture.
         
-5.  **Optional punctuation hiding without moving punctuation**  
+5.  **Nonce-aware keystream derivation (2.x)**  
+    Every message uses a fresh nonce embedded in the ciphertext framing and mixed into PBKDF2 salt derivation, preventing keystream reuse across messages.
+    
+6.  **Optional punctuation hiding without moving punctuation**  
     A reversible punctuation swap can reduce semantic cues (e.g., question vs exclamation) while keeping punctuation positions unchanged.
     
 
 ___
 
-## Core primitive: PBKDF2 keystream + non-zero rotations
+## Core primitive: PBKDF2 keystream + non-zero rotations (nonce-aware)
 
 ### Keystream derivation
 
-For an input string `s`, ROT500K derives a byte stream:
+For an input string `s`, ROT500K2 derives a byte stream:
 
--   `ks = PBKDF2_SHA256(password, salt, iterations, needBytes)`
+```
+ks = PBKDF2_SHA256(
+  password,
+  dsalt(baseSalt, nonce, domain),
+  iterations,
+  needBytes
+)
+
+```
+
+Key points:
+
+-   A **per-message nonce** is embedded in the ciphertext and included in the salt.
     
-
-This keystream is then consumed sequentially (wrapping if needed) to compute a **position-dependent shift** per character.
+-   Different sub-operations (core transform, punctuation shifting, verification) use **domain-separated salts**.
+    
 
 ### Non-zero rotation rule
 
 To avoid leaking unchanged characters, the transform forces shifts to never be zero:
 
--   `shift = (ks[i] + 1) * direction`
+```
+shift = (ks[i] + 1) * direction
+```
+
+-   Encrypt uses `direction = +1`
     
--   decrypt uses `direction = -1`
+-   Decrypt uses `direction = -1`
     
 
-That “+1” guarantees every affected character changes (for any set of size > 1), while preserving perfect invertibility.
+That `+1` guarantees every affected character changes (for sets larger than 1), while preserving perfect invertibility.
 
 ### Separator invariance
 
@@ -68,17 +91,17 @@ Characters used as structural separators are not transformed:
 -   apostrophe `"'"`
     
 
-This ensures that token boundaries and common formatting conventions remain intact.
+This ensures that token boundaries and formatting survive the transformation.
 
 ___
 
-## ROT500K base mode (no length increase)
+## ROT500K2 base mode (length-preserving)
 
-**ROT500K** is the minimal, length-preserving transform.
+**ROT500K2** is the minimal, length-preserving transform.
 
 ### What it transforms
 
--   **Digits (0–9)**: rotated inside 10 digits → still digits
+-   **Digits (0–9)**: rotated within digits → still digits
     
 -   **ASCII letters**:
     
@@ -86,18 +109,18 @@ ___
         
     -   consonants rotate within `bcdfghjklmnpqrstvwxyz`
         
-    -   case is preserved (uppercase stays uppercase, lowercase stays lowercase)
+    -   case is preserved
         
--   **Portuguese accented vowels**: rotated within dedicated sets (both lower and upper)
+-   **Portuguese accented vowels**: rotated within dedicated sets
     
--   **Portuguese ç / Ç**: included as their own tiny sets (effectively toggled/rotated in a set of size 1–2 depending on implementation detail)
+-   **Portuguese ç / Ç**: handled in dedicated sets, reversible
     
 
 ### What it leaves alone
 
 -   separators (space, `-`, `'`)
     
--   any character not classified into a handled set (symbols, emojis, etc.) passes through unchanged unless punctuation shifting is enabled.
+-   characters outside handled sets (symbols, emojis, etc.) pass through unchanged unless punctuation shifting is enabled
     
 
 **Key property:** output length equals input length.
@@ -106,18 +129,48 @@ ___
 
 ## Optional punctuation shifting
 
-ROT500K includes an optional, reversible punctuation swap step that **does not move punctuation positions**.
+ROT500K2 includes an optional, reversible punctuation swap that **does not move punctuation positions**.
 
-In the shown implementation, punctuation shifting is intentionally minimal:
+In the reference implementation:
 
--   opening marks set: `¿¡`
+-   opening marks: `¿¡`
     
--   ending marks set: `!?`
+-   ending marks: `!?`
     
 
-Each punctuation character in those sets rotates within its own small set using a keystream derived from a **punctuation-specific salt suffix** (so punctuation uses an independent sub-stream).
+Each punctuation character rotates within its own small set using a **nonce-aware, domain-separated keystream**.
 
-**Purpose:** hide the semantic hint of “question vs exclamation” while keeping sentences visually readable and preserving layout.
+**Purpose:** hide semantic cues like “question vs exclamation” while keeping text readable and layout-stable.
+
+___
+
+## Stealth framing (ROT500K2 wire format)
+
+ROT500K2 ciphertexts are wrapped in a **stealth frame** with **no fixed ASCII signature**, designed to blend naturally into text.
+
+High-level behavior:
+
+-   The frame embeds:
+    
+    -   mode identifier
+        
+    -   per-message nonce
+        
+    -   optional padding
+        
+-   The header is encoded as **pronounceable syllables**
+    
+-   The payload immediately follows the header
+    
+
+### Strict vs tolerant decoding
+
+-   **Verified modes (T / P / V)** use **strict frame parsing**.
+    
+-   **Base ROT500K2 decode** may optionally use **tolerant detection**, scanning text to locate a valid stealth frame embedded inside a larger string.
+    
+
+This makes base decoding robust when ciphertext is pasted into surrounding prose, logs, or messages.
 
 ___
 
@@ -125,108 +178,104 @@ ___
 
 A pure reversible obfuscation transform has a classic issue:
 
-> If you decode with the wrong password/salt/iterations, you still get _some_ output.  
-> It may look plausible, and there’s no built-in way to know it’s wrong.
+> Decoding with the wrong password still produces _some_ output, and it may look plausible.
 
-ROT500K addresses this with verified variants that embed a **keyed authenticity signal** in the text itself, allowing decode to return **true/false**.
+ROT500K2 addresses this with verified variants that embed a **keyed authenticity signal**, allowing decode to return **OK / FAILED**.
 
 ___
 
 ## Verified family overview
 
-### ROT500KT — Token-verified (adds chars per token)
+### ROT500K2T — Token-verified (adds chars per token)
 
 **Idea:** append `N` verification characters to every token.
 
-1.  Split plaintext into tokens using token separators (space, punctuation, newlines, etc.).
+1.  Split plaintext into tokens.
     
-2.  For each token `t` at index `i`, compute:
+2.  Derive an **HMAC key via PBKDF2** (nonce-aware, domain-separated).
     
-    -   `mac = HMAC_SHA256(password, "domain|salt|iterations|i|t")`
-        
-3.  Convert bytes into `N` check characters:
+3.  For each token `t` at index `i`, compute:
     
-    -   digit-only tokens → check chars are digits
+    ```
+mac = HMAC_SHA256(domain | salt | iterations | nonce | i | t)
+    ```
+    
+4.  Convert MAC bytes into `N` check characters:
+    
+    -   digit tokens → digits
         
-    -   other tokens → check chars are consonant letters (optionally uppercase if token is all-caps)
+    -   other tokens → consonant letters (case-aware)
         
-4.  Append the check characters to the corresponding token in the ciphertext.
+5.  Append the check characters to each cipher token.
     
 
 On decode:
 
--   strip the last `N` chars from each token
+-   strip checks
     
--   decode the base cipher
+-   decode base cipher
     
--   recompute expected checks from the recovered plaintext
+-   recompute checks from decoded plaintext
     
--   compare → **OK/FAILED**
+-   compare → **OK / FAILED**
     
 
 **Traits**
 
--   “Stealthy” (no obvious header)
+-   Stealthy (no visible header)
     
--   Robust for medium/long text with multiple tokens
+-   Best for medium/long token-rich text
     
--   Increases length by `N * tokenCount`
+-   Length increases by `N × tokenCount`
     
 
 ___
 
-### ROT500KP — Prefix-verified (adds a word-like prefix)
+### ROT500K2P — Prefix-verified (adds a word-like prefix)
 
-**Idea:** prepend a short, human-looking tag derived from the plaintext, so even very short inputs can be verified.
+**Idea:** prepend a short, human-looking tag derived from the plaintext.
 
-1.  Compute a MAC over the entire plaintext:
+1.  Compute a MAC over the entire plaintext (nonce-aware).
     
-    -   `mac = HMAC_SHA256(password, "domain|salt|iterations|plain")`
-        
-2.  Generate a **pronounceable prefix** (e.g., two short pseudo-words) from MAC bytes.
+2.  Generate a **pronounceable prefix** (e.g., two pseudo-words).
     
-3.  Add a punctuation marker and a space (e.g., `"? "` or `"! "`), then the ciphertext:
+3.  Append punctuation and a space, then the ciphertext.
     
-    -   `"<prefix>? <cipher>"`
-        
 
 On decode:
 
--   parse prefix until `"? "` or `"! "`
+-   parse prefix
     
 -   decode remainder
     
--   recompute expected prefix from decoded plaintext
+-   recompute expected prefix
     
--   compare → **OK/FAILED**
+-   compare → **OK / FAILED**
     
 
 **Traits**
 
--   Best for **very short** strings (single token, short IDs)
+-   Best for **very short** strings
     
--   Verification overhead is constant-ish (a fixed prefix)
+-   Fixed, visible overhead
     
--   More visible than KT (because it’s a header)
+-   More obvious than KT
     
 
 ___
 
-### ROT500KV — Verified auto (adaptive)
+### ROT500K2V — Verified auto (adaptive)
 
-**ROT500KV** is a convenience “best choice” wrapper:
+**ROT500K2V** automatically selects the best strategy:
 
--   For suitable inputs (multiple tokens, not too short, tokens longer than `N`), it selects **ROT500KT**
+-   Uses **ROT500K2T** for suitable multi-token text
     
--   Otherwise it selects **ROT500KP**
+-   Falls back to **ROT500K2P** for short or unsuitable inputs
+    
+-   May increase verification strength automatically for very short messages
     
 
-Additionally, it may **increase `checkCharsPerToken` automatically for short plaintexts** (e.g., minimum 2 or 3) to reduce false-OK probability when the message is tiny.
-
-It also includes a “don’t double-encrypt by accident” behavior:
-
--   If input _looks like_ ROT500K ciphertext (heuristics), it tries to decrypt first; if verification succeeds, it returns plaintext.
-    
+On decode, it tries **token-verified first**, then **prefix-verified**.
 
 ___
 
@@ -234,43 +283,44 @@ ___
 
 ROT13 is:
 
--   fixed, unkeyed substitution
+-   fixed and unkeyed
     
 -   trivially recognizable
     
 -   trivially reversible
     
 
-ROT500K is:
+ROT500K2 is:
 
 -   **keyed**
     
--   **polyalphabetic** (position-dependent mapping)
+-   **polyalphabetic**
     
--   expensive to brute-force _parameters_ due to PBKDF2 cost
+-   nonce-hardened against keystream reuse
     
--   optionally **verifiable** (KV/KT/KP), enabling definitive wrong-key detection
+-   expensive to brute-force due to PBKDF2 cost
+    
+-   optionally **verifiable**, enabling definitive wrong-key detection
     
 
 ___
 
 ## Practical guidance
 
--   Use **ROT500K** when you _must_ preserve length exactly and don’t need “wrong password” detection.
+-   Use **ROT500K2** when you must preserve length exactly and don’t need verification.
     
--   Use **ROT500KV** when you want a safe default that:
+-   Use **ROT500K2V** as a safe default with adaptive verification.
     
-    -   embeds verification
-        
-    -   adapts to short vs long text automatically
-        
--   Use **ROT500KT** explicitly when you want stealthy verification on token-rich text.
+-   Use **ROT500K2T** explicitly for stealthy verification on token-rich text.
     
--   Use **ROT500KP** explicitly when inputs are short (IDs, single words, short labels) and you still need verification.
+-   Use **ROT500K2P** explicitly for very short inputs where KT is ineffective.
     
 
 ___
 
 ## Security posture (what it is and isn’t)
 
-ROT500K is designed as **format-preserving obfuscation**, not conventional ciphertext. It’s optimized for human-text workflows: stable separators, readable structure, deterministic reversal, and optional verification signals. For high-stakes confidentiality of arbitrary data, use standard authenticated encryption; for “scramble this text but keep it text-shaped,” ROT500K is purpose-built.
+ROT500K2 is **format-preserving obfuscation**, not conventional ciphertext. It is optimized for human-text workflows: stable separators, readable structure, deterministic reversal, nonce-hardened keystreams, and optional verification signals.
+
+For high-stakes confidentiality of arbitrary data, use standard authenticated encryption.  
+For “scramble this text but keep it text-shaped,” ROT500K2 is purpose-built.
