@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>PhonoShift Decoder</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1115;
+      --panel: #171a21;
+      --line: rgba(255,255,255,.12);
+      --text: #e8ecf3;
+      --muted: #aab4c3;
+      --ok: #7ee787;
+      --bad: #ff7b72;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 24px;
+    }
+    .wrap {
+      max-width: 860px;
+      margin: 0 auto;
+    }
+    .box {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 18px;
+    }
+    h1 {
+      margin: 0 0 10px 0;
+      font-size: 1.25rem;
+    }
+    .small {
+      color: var(--muted);
+      font-size: .95rem;
+      line-height: 1.45;
+    }
+    .status {
+      margin-top: 14px;
+      font-size: .95rem;
+    }
+    .ok { color: var(--ok); }
+    .bad { color: var(--bad); }
+    textarea {
+      width: 100%;
+      min-height: 220px;
+      resize: vertical;
+      margin-top: 14px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.03);
+      color: var(--text);
+      padding: 14px;
+      font: 15px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="box">
+      <h1>PhonoShift Decoder</h1>
+      <div class="small">
+        Open this page from a QR/shared URL containing
+        <code>#m=...</code> and <code>d=...</code>. If the password is correct,
+        the plaintext will be shown below.
+      </div>
+
+      <div id="status" class="status">Waiting for shared message…</div>
+      <textarea id="out" readonly placeholder="Decoded message will appear here..."></textarea>
+    </div>
+  </div>
+
+  <script src="phonoshift.js"></script>
+  <script>
+    window.addEventListener("DOMContentLoaded", () => {
+      PhonoShift.initDecoderPage();
+    });
+  </script>
+</body>
+</html>
